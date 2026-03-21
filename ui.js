@@ -39,8 +39,8 @@ function iconoTendencia(ganancia) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
-function renderDashboard() {
-  const r = calcularResumenGlobal();
+async function renderDashboard() {
+  const r = await calcularResumenGlobal();
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
@@ -135,8 +135,8 @@ function kpiCard(label, valor, iconKey, colorClass) {
 
 // ─── LISTADO PRODUCTOS ────────────────────────────────────────────────────────
 
-function renderProductos(filtros = {}) {
-  let productos = getProductosEnriquecidos();
+async function renderProductos(filtros = {}) {
+  let productos = await getProductosEnriquecidos();
   const categorias = [...new Set(productos.map(p => p.categoria).filter(Boolean))];
 
   if (filtros.busqueda) {
@@ -235,8 +235,8 @@ function renderProductos(filtros = {}) {
 
 // ─── DETALLE PRODUCTO ─────────────────────────────────────────────────────────
 
-function renderDetalleProducto(id) {
-  const p = getProductoEnriquecido(id);
+async function renderDetalleProducto(id) {
+  const p = await getProductoEnriquecido(id);
   if (!p) { navigate('productos'); return; }
 
   document.querySelector('#main-content').innerHTML = `
@@ -327,8 +327,8 @@ function renderDetalleProducto(id) {
 
 // ─── REPORTES ─────────────────────────────────────────────────────────────────
 
-function renderReportes() {
-  const r = getReportes();
+async function renderReportes() {
+  const r = await getReportes();
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
@@ -445,8 +445,8 @@ function switchTab(btn, tabId) {
 
 // ─── MODAL PRODUCTO ───────────────────────────────────────────────────────────
 
-function openModalProducto(id = null) {
-  const p = id ? getProductoById(id) : null;
+async function openModalProducto(id = null) {
+  const p = id ? await getProductoById(id) : null;
   const titulo = p ? 'Editar producto' : 'Nuevo producto';
 
   document.getElementById('modal-overlay').innerHTML = `
@@ -576,8 +576,8 @@ function calcularInversionForm() {
 
 // ─── MODAL VENTA ──────────────────────────────────────────────────────────────
 
-function openModalVenta(productoId) {
-  const p = getProductoEnriquecido(productoId);
+async function openModalVenta(productoId) {
+  const p = await getProductoEnriquecido(productoId);
   if (!p) return;
 
   document.getElementById('modal-overlay').innerHTML = `
