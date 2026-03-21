@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Centris Inversiones</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ═══════════ SIDEBAR ═══════════ -->
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <h2>📦 Centris</h2>
+      <span>Control de Inversiones</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Principal</div>
+      <button class="nav-link active" data-vista="dashboard" onclick="navigate('dashboard')">
+        <span class="nav-icon">🏠</span> Dashboard
+      </button>
+      <button class="nav-link" data-vista="productos" onclick="navigate('productos')">
+        <span class="nav-icon">📦</span> Productos
+      </button>
+      <button class="nav-link" data-vista="reportes" onclick="navigate('reportes')">
+        <span class="nav-icon">📊</span> Reportes
+      </button>
+      <div class="nav-section-label" style="margin-top:8px">Configuración</div>
+      <button class="nav-link" data-vista="firebase" onclick="navigate('firebase')">
+        <span class="nav-icon">🔥</span> Firebase
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      v1.0 · localStorage<br>
+      <span style="opacity:.5">Listo para Firebase</span>
+    </div>
+  </aside>
+
+  <!-- ═══════════ MAIN ═══════════ -->
+  <div id="main-wrapper">
+
+    <!-- Header -->
+    <header id="header">
+      <div class="header-left">
+        <button id="menu-toggle">☰</button>
+        <span class="header-title">Centris Ventas — Control de Inversiones</span>
+      </div>
+      <div class="header-right">
+        <div class="header-avatar">CV</div>
+      </div>
+    </header>
+
+    <!-- Contenido dinámico -->
+    <main id="main-content">
+      <!-- Renderizado por JavaScript -->
+    </main>
+
+  </div><!-- /main-wrapper -->
+
+</div><!-- /app -->
+
+<!-- Modal overlay (reutilizable) -->
+<div id="modal-overlay"></div>
+
+<!-- Toast de notificaciones -->
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════ SCRIPTS ═══════════ -->
+<!-- Orden importante: primero datos, luego lógica, luego UI, luego app -->
+<script src="storage.js"></script>
+<script src="productos.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
