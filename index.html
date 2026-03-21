@@ -71,6 +71,18 @@
 
 <!-- ═══════════ SCRIPTS ═══════════ -->
 <!-- Orden importante: primero datos, luego lógica, luego UI, luego app -->
+
+<!-- Firebase SDK (versión compat, no necesita npm) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<!-- Tu configuración -->
+<script src="firebase-config.js"></script>
+
+<!-- Luego sí los scripts de la app -->
+<script src="storage.js"></script>
+<script src="productos.js"></script>
+
 <script src="storage.js"></script>
 <script src="productos.js"></script>
 <script src="ui.js"></script>
