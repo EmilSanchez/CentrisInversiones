@@ -4,19 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Centris Inversiones</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232563eb'/%3E%3Cpolyline points='10,46 24,30 34,38 54,16' fill='none' stroke='%23ffffff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpolyline points='44,16 54,16 54,26' fill='none' stroke='%2322d3ee' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='10' cy='46' r='3.5' fill='%2393c5fd'/%3E%3Ccircle cx='24' cy='30' r='3.5' fill='%2393c5fd'/%3E%3Ccircle cx='34' cy='38' r='3.5' fill='%2393c5fd'/%3E%3Ccircle cx='54' cy='16' r='3.5' fill='%2322d3ee'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="app">
-
-  <!-- ═══════════ SIDEBAR ═══════════ -->
   <aside id="sidebar">
     <div class="sidebar-logo">
       <h2>📦 Centris</h2>
       <span>Control de Inversiones</span>
     </div>
-
     <nav class="sidebar-nav">
       <div class="nav-section-label">Principal</div>
       <button class="nav-link active" data-vista="dashboard" onclick="navigate('dashboard')">
@@ -33,17 +31,13 @@
         <span class="nav-icon">🔥</span> Firebase
       </button>
     </nav>
-
     <div class="sidebar-footer">
-      v1.0 · localStorage<br>
-      <span style="opacity:.5">Listo para Firebase</span>
+      v2.0 · Firebase 🔥<br>
+      <span style="opacity:.5">inversionescentris</span>
     </div>
   </aside>
 
-  <!-- ═══════════ MAIN ═══════════ -->
   <div id="main-wrapper">
-
-    <!-- Header -->
     <header id="header">
       <div class="header-left">
         <button id="menu-toggle">☰</button>
@@ -53,24 +47,21 @@
         <div class="header-avatar">CV</div>
       </div>
     </header>
+    <main id="main-content"></main>
+  </div>
+</div>
 
-    <!-- Contenido dinámico -->
-    <main id="main-content">
-      <!-- Renderizado por JavaScript -->
-    </main>
-
-  </div><!-- /main-wrapper -->
-
-</div><!-- /app -->
-
-<!-- Modal overlay (reutilizable) -->
 <div id="modal-overlay"></div>
-
-<!-- Toast de notificaciones -->
 <div id="toast" class="toast"></div>
 
-<!-- ═══════════ SCRIPTS ═══════════ -->
-<!-- Orden importante: primero datos, luego lógica, luego UI, luego app -->
+<!-- 1. Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<!-- 2. Tu configuracion de Firebase -->
+<script src="firebase-config.js"></script>
+
+<!-- 3. App -->
 <script src="storage.js"></script>
 <script src="productos.js"></script>
 <script src="ui.js"></script>

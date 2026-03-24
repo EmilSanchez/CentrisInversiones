@@ -1,8 +1,8 @@
-// firebase-config.js
-// Usa la versión "compat" para que funcione sin npm ni webpack
-
-// ── Cargar Firebase ──────────────────────────────────────────────────────
-// (estos scripts van en index.html, no aquí)
+/**
+ * FIREBASE-CONFIG.JS
+ * Configuración e inicialización de Firebase para Centris Inversiones.
+ * Este archivo debe cargarse ANTES que storage.js en el index.html
+ */
 
 const firebaseConfig = {
   apiKey: "AIzaSyBsR59MeyhKi-mn0Str6rDztTUstBuIWJI",
@@ -13,5 +13,10 @@ const firebaseConfig = {
   appId: "1:116701797942:web:2d735844f17df2c76bc297"
 };
 
+// Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
+
+// Instancia global de Firestore — usada por storage.js
 const db = firebase.firestore();
+
+console.log('✅ Firebase conectado a:', firebaseConfig.projectId);
