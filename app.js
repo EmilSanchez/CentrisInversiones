@@ -288,6 +288,57 @@ async function descargarReporte(tipo) {
   mostrarAlerta(`Reporte "${filename}" descargado correctamente.`, 'success');
 }
 
+// ─── REPONER STOCK ────────────────────────────────────────────────────────────
+
+async function guardarReposicion(productoId) {
+  const form = document.getElementById('form-reposicion');
+  if (!form) return;
+
+  const d = Object.fromEntries(new FormData(form));
+  const cantNueva = parseInt(d.cantidadNueva) || 0;
+  const usdNuevo = parseFloat(d.precioUSDNuevo) || 0;
+  const tasaNueva = parseFloat(d.tasaDolarNuevo) || 0;
+  const envioNuevo = parseFloat(d.envioNuevo) || 0;
+  const otrosNuevo = parseFloat(d.otrosCostosNuevo) || 0;
+
+  if (cantNueva <= 0) { mostrarAlerta('Ingresa una cantidad válida.', 'error'); return; }
+  if (usdNuevo <= 0) { mostrarAlerta('Ingresa el precio en USD.', 'error'); return; }
+  if (tasaNueva <= 0) { mostrarAlerta('Ingresa la tasa del dólar.', 'error'); return; }
+
+  const p = await getProductoById(productoId);
+  if (!p) return;
+
+  // Calcular nuevo promedio ponderado
+  const invAnterior = (p.precioUSD * p.tasaDolar * p.cantidad) + (p.envio || 0) + (p.otrosCostos || 0);
+  const invNuevoLote = (usdNuevo * tasaNueva * cantNueva) + envioNuevo + otrosNuevo;
+  const totalCantidad = p.cantidad + cantNueva;
+  const totalInversion = invAnterior + invNuevoLote;
+  const costoPromedioUSD = totalCantidad > 0 ? (totalInversion / tasaNueva) / totalCantidad : usdNuevo;
+
+  try {
+    await updateProducto(productoId, {
+      cantidad: totalCantidad,
+      precioUSD: parseFloat(costoPromedioUSD.toFixed(4)),
+      tasaDolar: tasaNueva,
+      envio: 0,        // Ya incorporado al promedio
+      otrosCostos: 0,  // Ya incorporado al promedio
+      estado: 'activo', // Reactivar si estaba agotado
+    });
+
+    mostrarAlerta(`✅ Stock actualizado: +${cantNueva} unidades agregadas. Nuevo total: ${totalCantidad} uds.`, 'success');
+    closeModal();
+
+    if (appState.vistaActual === 'detalle-producto') {
+      await renderDetalleProducto(productoId);
+    } else {
+      await navigate('productos');
+    }
+  } catch (err) {
+    console.error(err);
+    mostrarAlerta('Error al reponer el stock. Intenta de nuevo.', 'error');
+  }
+}
+
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 
 async function marcarFirebaseConectado() {
