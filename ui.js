@@ -1,6 +1,6 @@
 /**
  * UI.JS — Renderizado de vistas
- * Cada función genera el HTML de una sección y lo inyecta en el contenedor principal.
+ * Actualizado para Firebase (async/await) + modal de reposición de stock
  */
 
 // ─── UTILIDADES UI ────────────────────────────────────────────────────────────
@@ -221,6 +221,7 @@ async function renderProductos(filtros = {}) {
                     <div class="action-btns">
                       <button class="btn-icon" title="Ver" onclick="navigate('detalle-producto','${p.id}')">👁</button>
                       <button class="btn-icon" title="Venta" onclick="openModalVenta('${p.id}')">💰</button>
+                      <button class="btn-icon" title="Reponer stock" onclick="openModalReponerStock('${p.id}')">📦</button>
                       <button class="btn-icon" title="Editar" onclick="openModalProducto('${p.id}')">✏️</button>
                       <button class="btn-icon btn-danger" title="Eliminar" onclick="confirmarEliminar('${p.id}')">🗑</button>
                     </div>
@@ -236,6 +237,10 @@ async function renderProductos(filtros = {}) {
 // ─── DETALLE PRODUCTO ─────────────────────────────────────────────────────────
 
 async function renderDetalleProducto(id) {
+  // Limpiar caché para obtener ventas frescas de Firebase
+  _cache.productos = null;
+  _cache.ventas = null;
+
   const p = await getProductoEnriquecido(id);
   if (!p) { navigate('productos'); return; }
 
@@ -243,7 +248,10 @@ async function renderDetalleProducto(id) {
     <div class="page-header">
       <button class="btn-back" onclick="navigate('productos')">← Volver</button>
       <h1>${p.nombre}</h1>
-      <button class="btn-primary" onclick="openModalVenta('${p.id}')">+ Registrar venta</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary" onclick="openModalReponerStock('${p.id}')">📦 Reponer stock</button>
+        <button class="btn-primary" onclick="openModalVenta('${p.id}')">+ Registrar venta</button>
+      </div>
     </div>
 
     <div class="detalle-grid">
@@ -447,6 +455,7 @@ function switchTab(btn, tabId) {
 
 async function openModalProducto(id = null) {
   const p = id ? await getProductoById(id) : null;
+  const cfg = await getConfig();
   const titulo = p ? 'Editar producto' : 'Nuevo producto';
 
   document.getElementById('modal-overlay').innerHTML = `
@@ -503,7 +512,7 @@ async function openModalProducto(id = null) {
               </div>
               <div class="form-group">
                 <label>Tasa del dólar (COP) *</label>
-                <input type="number" name="tasaDolar" value="${p?.tasaDolar || getConfig().tasaDolar}" min="0" required oninput="calcularInversionForm()">
+                <input type="number" name="tasaDolar" value="${p?.tasaDolar || cfg.tasaDolar}" min="0" required oninput="calcularInversionForm()">
               </div>
             </div>
             <div class="form-row">
@@ -632,9 +641,108 @@ async function openModalVenta(productoId) {
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
+// ─── MODAL REPONER STOCK ──────────────────────────────────────────────────────
+
+async function openModalReponerStock(productoId) {
+  const p = await getProductoById(productoId);
+  if (!p) return;
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>📦 Reponer stock</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="venta-producto-info">
+          ${imagenProducto(p.imagen, p.nombre, 48)}
+          <div>
+            <div class="fw600">${p.nombre}</div>
+            <div class="small-text text-muted">Stock actual registrado: <strong>${p.cantidad}</strong> unidades compradas</div>
+            <div class="small-text text-muted">Costo anterior: ${fmt.cop(p.precioUSD * p.tasaDolar)}/ud</div>
+          </div>
+        </div>
+
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;margin:12px 0;font-size:.85rem;color:#0369a1;">
+          ℹ️ Ingresa los datos del <strong>nuevo lote</strong>. Se sumarán al stock existente y se calculará el nuevo costo promedio.
+        </div>
+
+        <form id="form-reposicion" onsubmit="return false">
+          <input type="hidden" name="productoId" value="${p.id}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Unidades nuevas a agregar *</label>
+              <input type="number" name="cantidadNueva" min="1" required placeholder="Ej: 10" oninput="calcularReposicion()">
+            </div>
+            <div class="form-group">
+              <label>Precio de compra (USD) *</label>
+              <input type="number" name="precioUSDNuevo" step="0.01" min="0" value="${p.precioUSD}" required oninput="calcularReposicion()">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Tasa del dólar (COP) *</label>
+              <input type="number" name="tasaDolarNuevo" min="0" value="${p.tasaDolar}" required oninput="calcularReposicion()">
+            </div>
+            <div class="form-group">
+              <label>Envío del nuevo lote (COP)</label>
+              <input type="number" name="envioNuevo" min="0" value="0" oninput="calcularReposicion()">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Otros costos del nuevo lote (COP)</label>
+            <input type="number" name="otrosCostosNuevo" min="0" value="0" oninput="calcularReposicion()">
+          </div>
+
+          <div class="inversion-preview" id="preview-reposicion" style="margin-top:12px">
+            <div>Inversión nuevo lote: <strong id="rep-inversion-lote">—</strong></div>
+            <div>Nuevo total de stock: <strong id="rep-stock-total">—</strong></div>
+            <div>Nueva inversión total: <strong id="rep-inversion-total">—</strong></div>
+            <div>Nuevo costo unitario promedio: <strong id="rep-costo-unitario">—</strong></div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn-primary" onclick="guardarReposicion('${p.id}')">Agregar stock</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-overlay').style.display = 'flex';
+  // Datos del producto actual disponibles para calcularReposicion
+  window._productoReposicion = p;
+  setTimeout(calcularReposicion, 50);
+}
+
+function calcularReposicion() {
+  const f = document.getElementById('form-reposicion');
+  if (!f || !window._productoReposicion) return;
+  const p = window._productoReposicion;
+  const d = Object.fromEntries(new FormData(f));
+
+  const cantNueva = parseFloat(d.cantidadNueva) || 0;
+  const usdNuevo = parseFloat(d.precioUSDNuevo) || 0;
+  const tasaNueva = parseFloat(d.tasaDolarNuevo) || 0;
+  const envioNuevo = parseFloat(d.envioNuevo) || 0;
+  const otrosNuevo = parseFloat(d.otrosCostosNuevo) || 0;
+
+  const invNuevoLote = (usdNuevo * tasaNueva * cantNueva) + envioNuevo + otrosNuevo;
+  const invAnterior = (p.precioUSD * p.tasaDolar * p.cantidad) + (p.envio || 0) + (p.otrosCostos || 0);
+  const totalCantidad = p.cantidad + cantNueva;
+  const totalInversion = invAnterior + invNuevoLote;
+  const costoPromedio = totalCantidad > 0 ? totalInversion / totalCantidad : 0;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('rep-inversion-lote', fmt.cop(invNuevoLote));
+  set('rep-stock-total', `${fmt.num(totalCantidad)} uds`);
+  set('rep-inversion-total', fmt.cop(totalInversion));
+  set('rep-costo-unitario', fmt.cop(costoPromedio));
+}
+
 function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
   document.getElementById('modal-overlay').innerHTML = '';
+  window._productoReposicion = null;
 }
 
 // ─── MODAL DESCARGA REPORTE ───────────────────────────────────────────────────
@@ -683,83 +791,26 @@ function openModalReporte() {
 
 // ─── VISTA FIREBASE ────────────────────────────────────────────────────────────
 
-function renderFirebase() {
-  const cfg = getConfig();
+async function renderFirebase() {
+  const cfg = await getConfig();
   const conectado = !!cfg.firebaseConectado;
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
-      <h1>🔥 Conexión Firebase</h1>
+      <h1>🔥 Firebase</h1>
       <span class="firebase-status ${conectado ? 'on' : 'off'}">
         ${conectado ? '● Conectado' : '● Sin conectar'}
       </span>
     </div>
 
     <div class="firebase-panel">
-      <h3>🔥 ¿Por qué conectar Firebase?</h3>
-      <p>Actualmente los datos se guardan solo en este navegador (localStorage). Con Firebase, los datos quedan en la nube, se sincronizan entre dispositivos y no se pierden si borras el navegador.</p>
+      <h3>🔥 Sincronización en la nube activa</h3>
+      <p>Los datos se guardan en Firebase Firestore y se sincronizan entre todos tus dispositivos en tiempo real.</p>
     </div>
 
-    <div class="card" style="padding:28px;max-width:720px">
-      <h3 style="margin-bottom:20px;font-size:1rem">Pasos para conectar Firebase</h3>
-      <ol class="firebase-steps">
-        <li>
-          Ve a <strong>console.firebase.google.com</strong>, crea un proyecto nuevo (ej: <code>centris-inversiones</code>)
-        </li>
-        <li>
-          En el proyecto, haz clic en <strong>"Agregar app web"</strong> (icono &lt;/&gt;) y copia la configuración que te da Firebase
-        </li>
-        <li>
-          En tu proyecto, abre <code>index.html</code> y antes de los scripts agrega:
-          <pre style="background:#f8f9fb;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-top:8px;font-family:monospace;font-size:.78rem;overflow-x:auto">&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"&gt;&lt;/script&gt;
-&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"&gt;&lt;/script&gt;
-&lt;script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"&gt;&lt;/script&gt;
-&lt;script src="firebase-config.js"&gt;&lt;/script&gt;</pre>
-        </li>
-        <li>
-          Crea un archivo <code>firebase-config.js</code> con tu configuracion:
-          <pre style="background:#f8f9fb;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-top:8px;font-family:monospace;font-size:.78rem;overflow-x:auto">const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_ID",
-  appId: "TU_APP_ID"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const storage = firebase.storage();</pre>
-        </li>
-        <li>
-          En Firestore, activa la base de datos en modo <strong>prueba</strong> (permite leer/escribir sin login por 30 dias)
-        </li>
-        <li>
-          Reemplaza el archivo <code>storage.js</code> con la version Firebase. Las colecciones que usara la app: <code>productos</code>, <code>ventas</code> y <code>config</code>
-        </li>
-      </ol>
-
-      <div style="margin-top:24px;padding:16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px">
-        <div style="font-weight:600;color:#166534;margin-bottom:6px">📦 Estructura de colecciones en Firestore</div>
-        <pre style="font-family:monospace;font-size:.78rem;color:#166534;line-height:1.6">firestore/
-├── productos/    → { sku, nombre, precioUSD, tasaDolar, cantidad, ... }
-├── ventas/       → { productoId, fecha, cantidad, precioUnitario, ... }
-└── config/
-    └── global    → { tasaDolar, moneda }</pre>
-      </div>
-
-      <div style="margin-top:16px;padding:16px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px">
-        <div style="font-weight:600;color:#c2410c;margin-bottom:6px">⚠️ Importante al migrar</div>
-        <p style="font-size:.85rem;color:#9a3412">
-          Las funciones de <code>storage.js</code> son sincronas ahora. Con Firebase seran <strong>async/await</strong>.
-          Solo necesitas agregar <code>async</code> a las funciones en <code>app.js</code> que llaman datos y usar <code>await</code> antes de cada llamada.
-          El resto de <code>ui.js</code> y <code>productos.js</code> no necesita cambios.
-        </p>
-      </div>
-
-      <div style="margin-top:20px;display:flex;gap:10px">
-        <button class="btn-primary" onclick="marcarFirebaseConectado()">Marcar como conectado</button>
-        <button class="btn-secondary" onclick="navigate('dashboard')">Volver al dashboard</button>
-      </div>
+    <div style="margin-top:20px;display:flex;gap:10px">
+      <button class="btn-primary" onclick="marcarFirebaseConectado()">Marcar como conectado</button>
+      <button class="btn-secondary" onclick="navigate('dashboard')">Volver al dashboard</button>
     </div>
   `;
 }

@@ -1,9 +1,9 @@
 /**
- * PRODUCTOS.JS — Lógica de productos (versión async/Firebase)
- * Todos los cálculos son los mismos, pero las funciones que leen datos son async.
+ * PRODUCTOS.JS — Lógica de productos
+ * Actualizado para Firebase (async/await)
  */
 
-// ─── CÁLCULOS (síncronos, no cambian) ────────────────────────────────────────
+// ─── CÁLCULOS ─────────────────────────────────────────────────────────────────
 
 function calcularInversion(p) {
   return (p.precioUSD * p.tasaDolar * p.cantidad) + (p.envio || 0) + (p.otrosCostos || 0);
@@ -18,6 +18,7 @@ function enriquecerProducto(producto, ventas) {
   const ventasProducto = ventas.filter(v => v.productoId === producto.id);
   const inversionTotal = calcularInversion(producto);
   const costoUnitario = calcularCostoUnitario(producto);
+
   const unidadesVendidas = ventasProducto.reduce((s, v) => s + (v.cantidad || 0), 0);
   const totalRecuperado = ventasProducto.reduce((s, v) => s + ((v.cantidad || 0) * (v.precioUnitario || 0)), 0);
   const stockActual = (producto.cantidad || 0) - unidadesVendidas;
@@ -31,23 +32,29 @@ function enriquecerProducto(producto, ventas) {
 
   return {
     ...producto,
-    inversionTotal, costoUnitario, unidadesVendidas, totalRecuperado,
-    stockActual, ganancia, recuperacionPct, estadoStock,
+    inversionTotal,
+    costoUnitario,
+    unidadesVendidas,
+    totalRecuperado,
+    stockActual,
+    ganancia,
+    recuperacionPct,
+    estadoStock,
     numVentas: ventasProducto.length,
     ventas: ventasProducto,
   };
 }
 
-// ─── ASYNC: funciones que consultan Firebase ──────────────────────────────────
-
 async function getProductosEnriquecidos() {
-  const [productos, ventas] = await Promise.all([getProductos(), getVentas()]);
+  const productos = await getProductos();
+  const ventas = await getVentas();
   return productos.map(p => enriquecerProducto(p, ventas));
 }
 
 async function getProductoEnriquecido(id) {
-  const [p, ventas] = await Promise.all([getProductoById(id), getVentasByProducto(id)]);
+  const p = await getProductoById(id);
   if (!p) return null;
+  const ventas = await getVentasByProducto(id);
   return enriquecerProducto(p, ventas);
 }
 
@@ -75,37 +82,45 @@ function validarVenta(datos, stockDisponible) {
 // ─── RESUMEN GLOBAL ───────────────────────────────────────────────────────────
 
 async function calcularResumenGlobal() {
-  const [productos, ventas] = await Promise.all([getProductos(), getVentas()]);
-  const productosE = productos.map(p => enriquecerProducto(p, ventas));
+  const productos = await getProductosEnriquecidos();
+  const ventas = await getVentas();
 
-  const totalInvertido = productosE.reduce((s, p) => s + p.inversionTotal, 0);
-  const totalRecuperado = productosE.reduce((s, p) => s + p.totalRecuperado, 0);
-  const gananciaTotal = productosE.reduce((s, p) => s + p.ganancia, 0);
-  const unidadesTotalesStock = productosE.reduce((s, p) => s + p.stockActual, 0);
-  const unidadesTotalesVendidas = productosE.reduce((s, p) => s + p.unidadesVendidas, 0);
-  const productosStockBajo = productosE.filter(p => p.estadoStock === 'bajo' || p.estadoStock === 'agotado');
+  const totalInvertido = productos.reduce((s, p) => s + p.inversionTotal, 0);
+  const totalRecuperado = productos.reduce((s, p) => s + p.totalRecuperado, 0);
+  const gananciaTotal = productos.reduce((s, p) => s + p.ganancia, 0);
+  const totalProductos = productos.length;
+  const unidadesTotalesStock = productos.reduce((s, p) => s + p.stockActual, 0);
+  const unidadesTotalesVendidas = productos.reduce((s, p) => s + p.unidadesVendidas, 0);
+  const productosStockBajo = productos.filter(p => p.estadoStock === 'bajo' || p.estadoStock === 'agotado');
 
   const ultimasVentas = [...ventas]
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
     .slice(0, 8)
-    .map(v => ({ ...v, producto: productos.find(p => p.id === v.productoId) }));
+    .map(v => ({
+      ...v,
+      producto: productos.find(p => p.id === v.productoId) || null,
+    }));
 
   return {
-    totalInvertido, totalRecuperado, gananciaTotal,
-    totalProductos: productosE.length,
-    unidadesTotalesStock, unidadesTotalesVendidas,
-    productosStockBajo, ultimasVentas,
+    totalInvertido,
+    totalRecuperado,
+    gananciaTotal,
+    totalProductos,
+    unidadesTotalesStock,
+    unidadesTotalesVendidas,
+    productosStockBajo,
+    ultimasVentas,
   };
 }
 
 // ─── REPORTES ─────────────────────────────────────────────────────────────────
 
 async function getReportes() {
-  const [productos, ventas] = await Promise.all([getProductos(), getVentas()]);
-  const productosE = productos.map(p => enriquecerProducto(p, ventas));
+  const productos = await getProductosEnriquecidos();
+  const ventas = await getVentas();
 
   const categorias = {};
-  productosE.forEach(p => {
+  productos.forEach(p => {
     const cat = p.categoria || 'Sin categoría';
     if (!categorias[cat]) categorias[cat] = { nombre: cat, inversion: 0, recuperado: 0, ganancia: 0, productos: 0 };
     categorias[cat].inversion += p.inversionTotal;
@@ -124,11 +139,11 @@ async function getReportes() {
   });
 
   return {
-    mayorInversion: [...productosE].sort((a, b) => b.inversionTotal - a.inversionTotal).slice(0, 10),
-    mayorGanancia: [...productosE].sort((a, b) => b.ganancia - a.ganancia).slice(0, 10),
-    menosMovimiento: [...productosE].sort((a, b) => a.numVentas - b.numVentas).slice(0, 10),
-    agotados: productosE.filter(p => p.estadoStock === 'agotado'),
-    conStock: productosE.filter(p => p.stockActual > 0),
+    mayorInversion: [...productos].sort((a, b) => b.inversionTotal - a.inversionTotal).slice(0, 10),
+    mayorGanancia: [...productos].sort((a, b) => b.ganancia - a.ganancia).slice(0, 10),
+    menosMovimiento: [...productos].sort((a, b) => a.numVentas - b.numVentas).slice(0, 10),
+    agotados: productos.filter(p => p.estadoStock === 'agotado'),
+    conStock: productos.filter(p => p.stockActual > 0),
     categorias: Object.values(categorias).sort((a, b) => b.inversion - a.inversion),
     meses: Object.values(meses).sort((a, b) => b.mes.localeCompare(a.mes)).slice(0, 12),
   };
