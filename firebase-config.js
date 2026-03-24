@@ -1,22 +1,20 @@
-/**
- * FIREBASE-CONFIG.JS
- * Configuración e inicialización de Firebase para Centris Inversiones.
- * Este archivo debe cargarse ANTES que storage.js en el index.html
- */
+// firebase-config.js
+// Agrega estos scripts en tu index.html ANTES de storage.js:
+//
+// <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+// <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+// <script src="firebase-config.js"></script>
+// <script src="storage.js"></script>  ← reemplazar con el nuevo storage.js
 
 const firebaseConfig = {
   apiKey: "AIzaSyBsR59MeyhKi-mn0Str6rDztTUstBuIWJI",
   authDomain: "inversionescentris.firebaseapp.com",
+  databaseURL: "https://inversionescentris-default-rtdb.firebaseio.com",
   projectId: "inversionescentris",
   storageBucket: "inversionescentris.firebasestorage.app",
   messagingSenderId: "116701797942",
   appId: "1:116701797942:web:2d735844f17df2c76bc297"
 };
 
-// Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
-
-// Instancia global de Firestore — usada por storage.js
 const db = firebase.firestore();
-
-console.log('✅ Firebase conectado a:', firebaseConfig.projectId);

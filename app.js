@@ -1,22 +1,15 @@
 /**
- * APP.JS — Inicialización, router y acciones globales (versión async/Firebase)
+ * APP.JS — Inicialización, router y acciones globales
+ * Actualizado para funcionar con Firebase (async/await)
  */
+
+// ─── ESTADO DE LA APP ─────────────────────────────────────────────────────────
 
 const appState = {
   vistaActual: 'dashboard',
   detalleProductoId: null,
   filtrosProductos: {},
 };
-
-// ─── LOADING HELPER ───────────────────────────────────────────────────────────
-
-function mostrarLoading() {
-  document.querySelector('#main-content').innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;height:60vh;flex-direction:column;gap:16px">
-      <div class="spinner"></div>
-      <span style="color:var(--text-muted);font-size:.9rem">Cargando datos…</span>
-    </div>`;
-}
 
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 
@@ -28,29 +21,48 @@ async function navigate(vista, param = null) {
     el.classList.toggle('active', el.dataset.vista === vista.split('-')[0]);
   });
 
-  mostrarLoading();
+  mostrarCargando(true);
 
   try {
     switch (vista) {
-      case 'dashboard':      await renderDashboard(); break;
-      case 'productos':      await renderProductos(appState.filtrosProductos); break;
-      case 'detalle-producto': await renderDetalleProducto(param); break;
-      case 'reportes':       await renderReportes(); break;
-      case 'firebase':       renderFirebase(); break;
-      default:               await renderDashboard();
+      case 'dashboard':
+        await renderDashboard();
+        break;
+      case 'productos':
+        await renderProductos(appState.filtrosProductos);
+        break;
+      case 'detalle-producto':
+        await renderDetalleProducto(param);
+        break;
+      case 'reportes':
+        await renderReportes();
+        break;
+      case 'firebase':
+        await renderFirebase();
+        break;
+      default:
+        await renderDashboard();
     }
   } catch (err) {
     console.error('Error al navegar:', err);
-    document.querySelector('#main-content').innerHTML = `
-      <div style="padding:40px;text-align:center">
-        <div style="font-size:2rem;margin-bottom:12px">⚠️</div>
-        <h3 style="color:var(--red);margin-bottom:8px">Error al cargar datos</h3>
-        <p style="color:var(--text-muted);font-size:.9rem">${err.message}</p>
-        <button class="btn-primary" style="margin-top:16px" onclick="navigate('dashboard')">Reintentar</button>
-      </div>`;
+    mostrarAlerta('Error al cargar los datos. Verifica la conexión con Firebase.', 'error');
+  } finally {
+    mostrarCargando(false);
   }
 
   document.getElementById('sidebar').classList.remove('open');
+}
+
+function mostrarCargando(activo) {
+  let el = document.getElementById('loading-overlay');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'loading-overlay';
+    el.innerHTML = '<div class="loading-spinner">⏳ Cargando...</div>';
+    el.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#64748b;';
+    document.body.appendChild(el);
+  }
+  el.style.display = activo ? 'flex' : 'none';
 }
 
 // ─── FILTROS ──────────────────────────────────────────────────────────────────
@@ -77,7 +89,10 @@ async function guardarProducto(id) {
   });
 
   const errores = validarProducto(data);
-  if (errores.length) { mostrarAlerta(errores.join('\n'), 'error'); return; }
+  if (errores.length) {
+    mostrarAlerta(errores.join('\n'), 'error');
+    return;
+  }
 
   try {
     if (id) {
@@ -90,7 +105,8 @@ async function guardarProducto(id) {
     closeModal();
     await navigate('productos');
   } catch (err) {
-    mostrarAlerta('Error al guardar: ' + err.message, 'error');
+    console.error(err);
+    mostrarAlerta('Error al guardar el producto. Intenta de nuevo.', 'error');
   }
 }
 
@@ -104,16 +120,18 @@ async function guardarVenta() {
   data.cantidad = parseInt(data.cantidad) || 0;
   data.precioUnitario = parseFloat(data.precioUnitario) || 0;
 
+  const p = await getProductoEnriquecido(data.productoId);
+  if (!p) return;
+
+  const errores = validarVenta(data, p.stockActual);
+  if (errores.length) {
+    mostrarAlerta(errores.join('\n'), 'error');
+    return;
+  }
+
   try {
-    const p = await getProductoEnriquecido(data.productoId);
-    if (!p) return;
-
-    const errores = validarVenta(data, p.stockActual);
-    if (errores.length) { mostrarAlerta(errores.join('\n'), 'error'); return; }
-
     await addVenta(data);
 
-    // Si stock llega a 0, actualizar estado
     const nuevo = await getProductoEnriquecido(data.productoId);
     if (nuevo.stockActual === 0) {
       await updateProducto(data.productoId, { estado: 'agotado' });
@@ -128,7 +146,8 @@ async function guardarVenta() {
       await navigate('productos');
     }
   } catch (err) {
-    mostrarAlerta('Error al registrar venta: ' + err.message, 'error');
+    console.error(err);
+    mostrarAlerta('Error al registrar la venta. Intenta de nuevo.', 'error');
   }
 }
 
@@ -136,13 +155,13 @@ async function guardarVenta() {
 
 async function confirmarEliminar(id) {
   const p = await getProductoById(id);
-  if (!confirm(`¿Eliminar el producto "${p?.nombre}"?\nTambién se eliminarán todas sus ventas.`)) return;
+  if (!confirm(`¿Eliminar el producto "${p?.nombre}"?\nTambién se eliminarán todas sus ventas. Esta acción no se puede deshacer.`)) return;
   try {
     await deleteProducto(id);
     mostrarAlerta('Producto eliminado.', 'info');
     await navigate('productos');
   } catch (err) {
-    mostrarAlerta('Error al eliminar: ' + err.message, 'error');
+    mostrarAlerta('Error al eliminar el producto.', 'error');
   }
 }
 
@@ -155,76 +174,8 @@ async function eliminarVenta(ventaId, productoId) {
     mostrarAlerta('Venta eliminada.', 'info');
     await renderDetalleProducto(productoId);
   } catch (err) {
-    mostrarAlerta('Error al eliminar: ' + err.message, 'error');
+    mostrarAlerta('Error al eliminar la venta.', 'error');
   }
-}
-
-// ─── DESCARGA DE REPORTES CSV ─────────────────────────────────────────────────
-
-async function descargarReporte(tipo) {
-  mostrarAlerta('Generando reporte…', 'info');
-  let csv = '';
-  let filename = '';
-  const sep = ';';
-
-  try {
-    const productos = await getProductosEnriquecidos();
-    const ventas = await getVentas();
-
-    if (tipo === 'inventario') {
-      filename = 'centris_inventario.csv';
-      const h = ['SKU','Nombre','Categoria','Proveedor','Precio USD','Tasa Dolar','Cantidad Comprada','Envio','Otros Costos','Inversion Total','Costo Unitario','Precio Sugerido','Unidades Vendidas','Stock Actual','Total Recuperado','Ganancia','Recuperacion %','Estado'];
-      csv = h.join(sep) + '\n' + productos.map(p => [
-        p.sku, p.nombre, p.categoria||'', p.proveedor||'',
-        p.precioUSD, p.tasaDolar, p.cantidad, p.envio||0, p.otrosCostos||0,
-        Math.round(p.inversionTotal), Math.round(p.costoUnitario), p.precioSugerido||0,
-        p.unidadesVendidas, p.stockActual, Math.round(p.totalRecuperado),
-        Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%', p.estado
-      ].join(sep)).join('\n');
-
-    } else if (tipo === 'ventas') {
-      filename = 'centris_ventas.csv';
-      const h = ['Fecha','Producto','SKU','Cantidad','Precio Unitario','Total Venta','Cliente','Observacion'];
-      const ventasOrd = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
-      csv = h.join(sep) + '\n' + ventasOrd.map(v => {
-        const p = productos.find(x => x.id === v.productoId);
-        return [v.fecha, p?.nombre||'Eliminado', p?.sku||'-', v.cantidad, v.precioUnitario, v.cantidad*v.precioUnitario, v.cliente||'', v.obs||''].join(sep);
-      }).join('\n');
-
-    } else if (tipo === 'stock') {
-      filename = 'centris_stock.csv';
-      const h = ['SKU','Nombre','Categoria','Cantidad Comprada','Vendidas','Stock Actual','Estado Stock','Estado Producto'];
-      csv = h.join(sep) + '\n' + productos.map(p => [p.sku, p.nombre, p.categoria||'', p.cantidad, p.unidadesVendidas, p.stockActual, p.estadoStock, p.estado].join(sep)).join('\n');
-
-    } else if (tipo === 'resumen') {
-      filename = 'centris_resumen_financiero.csv';
-      const h = ['SKU','Nombre','Inversion Total','Total Recuperado','Ganancia','Recuperacion %','Costo Unitario','Precio Sugerido','Margen %'];
-      csv = h.join(sep) + '\n' + productos.map(p => {
-        const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario)/p.precioSugerido*100).toFixed(1) : '0';
-        return [p.sku, p.nombre, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%', Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'].join(sep);
-      }).join('\n');
-    }
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-
-    closeModal();
-    mostrarAlerta(`"${filename}" descargado correctamente.`, 'success');
-  } catch (err) {
-    mostrarAlerta('Error al generar reporte: ' + err.message, 'error');
-  }
-}
-
-// ─── FIREBASE ─────────────────────────────────────────────────────────────────
-
-async function marcarFirebaseConectado() {
-  const cfg = await getConfig();
-  await saveConfig({ ...cfg, firebaseConectado: true });
-  mostrarAlerta('Estado actualizado.', 'info');
-  renderFirebase();
 }
 
 // ─── ALERTAS ──────────────────────────────────────────────────────────────────
@@ -241,8 +192,13 @@ function mostrarAlerta(mensaje, tipo = 'info') {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-  await cargarDatosDemo();
-  await navigate('dashboard');
+  try {
+    await cargarDatosDemo();
+    await navigate('dashboard');
+  } catch (err) {
+    console.error('Error al inicializar la app:', err);
+    mostrarAlerta('No se pudo conectar con Firebase. Revisa la consola.', 'error');
+  }
 
   document.getElementById('menu-toggle')?.addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('open');
@@ -254,3 +210,89 @@ async function init() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// ─── DESCARGA DE REPORTES CSV ─────────────────────────────────────────────────
+
+async function descargarReporte(tipo) {
+  let csv = '';
+  let filename = '';
+  const sep = ';';
+
+  const productos = await getProductosEnriquecidos();
+  const ventas = await getVentas();
+
+  if (tipo === 'inventario') {
+    filename = 'centris_inventario.csv';
+    const headers = ['SKU','Nombre','Categoria','Proveedor','Precio USD','Tasa Dolar','Cantidad Comprada','Envio','Otros Costos','Inversion Total','Costo Unitario','Precio Sugerido','Unidades Vendidas','Stock Actual','Total Recuperado','Ganancia','Recuperacion %','Estado'];
+    csv = headers.join(sep) + '\n';
+    csv += productos.map(p => [
+      p.sku, p.nombre, p.categoria||'', p.proveedor||'',
+      p.precioUSD, p.tasaDolar, p.cantidad, p.envio||0, p.otrosCostos||0,
+      Math.round(p.inversionTotal), Math.round(p.costoUnitario), p.precioSugerido||0,
+      p.unidadesVendidas, p.stockActual,
+      Math.round(p.totalRecuperado), Math.round(p.ganancia),
+      p.recuperacionPct.toFixed(1)+'%', p.estado
+    ].join(sep)).join('\n');
+
+  } else if (tipo === 'ventas') {
+    filename = 'centris_ventas.csv';
+    const headers = ['Fecha','Producto','SKU','Cantidad','Precio Unitario','Total Venta','Cliente','Observacion'];
+    csv = headers.join(sep) + '\n';
+    const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
+    const rows = await Promise.all(ventasOrdenadas.map(async v => {
+      const p = await getProductoById(v.productoId);
+      return [
+        v.fecha, p?.nombre||'Eliminado', p?.sku||'-',
+        v.cantidad, v.precioUnitario,
+        v.cantidad * v.precioUnitario,
+        v.cliente||'', v.obs||''
+      ].join(sep);
+    }));
+    csv += rows.join('\n');
+
+  } else if (tipo === 'stock') {
+    filename = 'centris_stock.csv';
+    const headers = ['SKU','Nombre','Categoria','Cantidad Comprada','Vendidas','Stock Actual','Estado Stock','Estado Producto'];
+    csv = headers.join(sep) + '\n';
+    csv += productos.map(p => [
+      p.sku, p.nombre, p.categoria||'',
+      p.cantidad, p.unidadesVendidas, p.stockActual,
+      p.estadoStock, p.estado
+    ].join(sep)).join('\n');
+
+  } else if (tipo === 'resumen') {
+    filename = 'centris_resumen_financiero.csv';
+    const headers = ['SKU','Nombre','Inversion Total','Total Recuperado','Ganancia','Recuperacion %','Costo Unitario','Precio Sugerido','Margen Estimado %'];
+    csv = headers.join(sep) + '\n';
+    csv += productos.map(p => {
+      const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
+      return [
+        p.sku, p.nombre,
+        Math.round(p.inversionTotal), Math.round(p.totalRecuperado),
+        Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%',
+        Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'
+      ].join(sep);
+    }).join('\n');
+  }
+
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  closeModal();
+  mostrarAlerta(`Reporte "${filename}" descargado correctamente.`, 'success');
+}
+
+// ─── FIREBASE ─────────────────────────────────────────────────────────────────
+
+async function marcarFirebaseConectado() {
+  const cfg = await getConfig();
+  await saveConfig({ ...cfg, firebaseConectado: true });
+  mostrarAlerta('¡Firebase conectado correctamente!', 'success');
+  await renderFirebase();
+}
