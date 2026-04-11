@@ -302,7 +302,7 @@ async function renderDetalleProducto(id) {
           <table class="tabla-detalle">
             <tbody>
               <tr><td class="td-label">SKU</td><td><code class="sku">${p.sku}</code></td><td class="td-label">Categoría</td><td>${p.categoria || '—'}</td></tr>
-              <tr><td class="td-label">Proveedor</td><td>${p.proveedor || '—'}</td><td class="td-label">Estado</td><td>${badge(p.estado)} ${badge(p.estadoStock)}</td></tr>
+              <tr><td class="td-label">Proveedor</td><td>${p.proveedor || '—'}</td><td class="td-label">Estado</td><td>${badge(p.estado)}</td></tr>
               <tr><td class="td-label">Precio sugerido</td><td class="fw600">${fmt.cop(p.precioSugerido)}</td><td class="td-label">Recuperación</td><td>${fmt.pct(p.recuperacionPct)} de la inversión</td></tr>
               ${p.descripcion ? `<tr><td class="td-label">Descripción</td><td colspan="3"><em class="text-muted">${p.descripcion}</em></td></tr>` : ''}
               ${p.link ? `<tr><td class="td-label">Link</td><td colspan="3"><a href="${p.link}" target="_blank" class="link">Ver en tienda</a></td></tr>` : ''}
