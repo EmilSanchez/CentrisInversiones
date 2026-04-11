@@ -1,24 +1,22 @@
 /**
  * STORAGE.JS — Capa de datos con Firebase Firestore
- * Reemplaza la versión localStorage. El resto de la app no cambia.
- *
- * IMPORTANTE: Las funciones ahora son async/await.
- * app.js ya fue actualizado para manejar esto correctamente.
+ * v2.1 — Añadido: colección movimientos para registro de inversiones/reposiciones/envíos
  */
 
-// ─── CACHÉ LOCAL (para evitar lentitud en lecturas repetidas) ─────────────────
+// ─── CACHÉ LOCAL ─────────────────────────────────────────────────────────
 
 let _cache = {
   productos: null,
   ventas: null,
   config: null,
+  movimientos: null,
 };
 
 function limpiarCache() {
-  _cache = { productos: null, ventas: null, config: null };
+  _cache = { productos: null, ventas: null, config: null, movimientos: null };
 }
 
-// ─── PRODUCTOS ────────────────────────────────────────────────────────────────
+// ─── PRODUCTOS ────────────────────────────────────────────────────────────
 
 async function getProductos() {
   if (_cache.productos) return _cache.productos;
@@ -27,15 +25,11 @@ async function getProductos() {
   return _cache.productos;
 }
 
-async function saveProductos(productos) {
-  // No se usa directamente — cada operación escribe su documento
-}
-
 async function addProducto(producto) {
   producto.creadoEn = new Date().toISOString();
   const ref = await db.collection('productos').add(producto);
   producto.id = ref.id;
-  _cache.productos = null; // invalidar caché
+  _cache.productos = null;
   return producto;
 }
 
@@ -48,13 +42,17 @@ async function updateProducto(id, datos) {
 
 async function deleteProducto(id) {
   await db.collection('productos').doc(id).delete();
-  // También eliminar ventas del producto
-  const snap = await db.collection('ventas').where('productoId', '==', id).get();
-  const batch = db.batch();
-  snap.docs.forEach(d => batch.delete(d.ref));
-  await batch.commit();
+  const snapV = await db.collection('ventas').where('productoId', '==', id).get();
+  const batch1 = db.batch();
+  snapV.docs.forEach(d => batch1.delete(d.ref));
+  await batch1.commit();
+  const snapM = await db.collection('movimientos').where('productoId', '==', id).get();
+  const batch2 = db.batch();
+  snapM.docs.forEach(d => batch2.delete(d.ref));
+  await batch2.commit();
   _cache.productos = null;
   _cache.ventas = null;
+  _cache.movimientos = null;
 }
 
 async function getProductoById(id) {
@@ -63,17 +61,13 @@ async function getProductoById(id) {
   return { id: doc.id, ...doc.data() };
 }
 
-// ─── VENTAS ───────────────────────────────────────────────────────────────────
+// ─── VENTAS ───────────────────────────────────────────────────────────────
 
 async function getVentas() {
   if (_cache.ventas) return _cache.ventas;
   const snap = await db.collection('ventas').orderBy('creadoEn', 'desc').get();
   _cache.ventas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   return _cache.ventas;
-}
-
-async function saveVentas(ventas) {
-  // No se usa directamente
 }
 
 async function addVenta(venta) {
@@ -94,7 +88,30 @@ async function deleteVenta(id) {
   _cache.ventas = null;
 }
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
+// ─── MOVIMIENTOS ──────────────────────────────────────────────────────────
+// Registra: inversiones iniciales, reposiciones, costos de envío, etc.
+
+async function getMovimientos() {
+  if (_cache.movimientos) return _cache.movimientos;
+  const snap = await db.collection('movimientos').orderBy('fechaHora', 'desc').get();
+  _cache.movimientos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return _cache.movimientos;
+}
+
+async function addMovimiento(mov) {
+  mov.fechaHora = new Date().toISOString();
+  const ref = await db.collection('movimientos').add(mov);
+  mov.id = ref.id;
+  _cache.movimientos = null;
+  return mov;
+}
+
+async function deleteMovimiento(id) {
+  await db.collection('movimientos').doc(id).delete();
+  _cache.movimientos = null;
+}
+
+// ─── CONFIG ───────────────────────────────────────────────────────────────
 
 async function getConfig() {
   if (_cache.config) return _cache.config;
@@ -112,17 +129,17 @@ async function saveConfig(config) {
   _cache.config = null;
 }
 
-// ─── UTIL ─────────────────────────────────────────────────────────────────────
+// ─── UTIL ─────────────────────────────────────────────────────────────────
 
 function generarId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-// ─── DATOS DEMO ───────────────────────────────────────────────────────────────
+// ─── DATOS DEMO ───────────────────────────────────────────────────────────
 
 async function cargarDatosDemo() {
   const productos = await getProductos();
-  if (productos.length > 0) return; // Ya hay datos, no cargar demo
+  if (productos.length > 0) return;
 
   const p1 = await addProducto({
     sku: 'AMZ-001',
@@ -182,11 +199,16 @@ async function cargarDatosDemo() {
     return d.toISOString().split('T')[0];
   };
 
-  await addVenta({ productoId: p1.id, fecha: fecha(20), cantidad: 3, precioUnitario: 280000, cliente: 'Cliente A', obs: '' });
-  await addVenta({ productoId: p1.id, fecha: fecha(12), cantidad: 2, precioUnitario: 265000, cliente: 'Cliente B', obs: 'Descuento por cantidad' });
-  await addVenta({ productoId: p1.id, fecha: fecha(5),  cantidad: 4, precioUnitario: 280000, cliente: 'Cliente C', obs: '' });
-  await addVenta({ productoId: p2.id, fecha: fecha(18), cantidad: 5, precioUnitario: 170000, cliente: 'Empresa XYZ', obs: 'Pedido corporativo' });
-  await addVenta({ productoId: p2.id, fecha: fecha(8),  cantidad: 3, precioUnitario: 160000, cliente: '', obs: '' });
-  await addVenta({ productoId: p3.id, fecha: fecha(15), cantidad: 8, precioUnitario: 110000, cliente: '', obs: '' });
-  await addVenta({ productoId: p3.id, fecha: fecha(3),  cantidad: 5, precioUnitario: 115000, cliente: 'Distribuidora Norte', obs: '' });
+  await addVenta({ productoId: p1.id, fecha: fecha(20), cantidad: 3, precioUnitario: 280000, cliente: 'Cliente A', telefono: '3001234567', obs: '' });
+  await addVenta({ productoId: p1.id, fecha: fecha(12), cantidad: 2, precioUnitario: 265000, cliente: 'Cliente B', telefono: '3009876543', obs: 'Descuento por cantidad' });
+  await addVenta({ productoId: p1.id, fecha: fecha(5),  cantidad: 4, precioUnitario: 280000, cliente: 'Cliente C', telefono: '3005551234', obs: '' });
+  await addVenta({ productoId: p2.id, fecha: fecha(18), cantidad: 5, precioUnitario: 170000, cliente: 'Empresa XYZ', telefono: '3004445566', obs: 'Pedido corporativo' });
+  await addVenta({ productoId: p2.id, fecha: fecha(8),  cantidad: 3, precioUnitario: 160000, cliente: '', telefono: '', obs: '' });
+  await addVenta({ productoId: p3.id, fecha: fecha(15), cantidad: 8, precioUnitario: 110000, cliente: '', telefono: '', obs: '' });
+  await addVenta({ productoId: p3.id, fecha: fecha(3),  cantidad: 5, precioUnitario: 115000, cliente: 'Distribuidora Norte', telefono: '3007778899', obs: '' });
+
+  // Movimientos demo
+  await addMovimiento({ tipo: 'inversion', productoId: p1.id, productoNombre: p1.nombre, descripcion: 'Inversión inicial - 20 uds Auriculares', costoProductos: p1.precioUSD * p1.tasaDolar * p1.cantidad, costoEnvio: 80000, otrosCostos: 15000, totalCOP: (p1.precioUSD * p1.tasaDolar * p1.cantidad) + 80000 + 15000, cantidad: 20 });
+  await addMovimiento({ tipo: 'inversion', productoId: p2.id, productoNombre: p2.nombre, descripcion: 'Inversión inicial - 15 uds Mouse', costoProductos: p2.precioUSD * p2.tasaDolar * p2.cantidad, costoEnvio: 60000, otrosCostos: 10000, totalCOP: (p2.precioUSD * p2.tasaDolar * p2.cantidad) + 60000 + 10000, cantidad: 15 });
+  await addMovimiento({ tipo: 'inversion', productoId: p3.id, productoNombre: p3.nombre, descripcion: 'Inversión inicial - 30 uds Soporte', costoProductos: p3.precioUSD * p3.tasaDolar * p3.cantidad, costoEnvio: 45000, otrosCostos: 5000, totalCOP: (p3.precioUSD * p3.tasaDolar * p3.cantidad) + 45000 + 5000, cantidad: 30 });
 }

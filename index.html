@@ -6,72 +6,98 @@
   <title>Centris Inversiones</title>
   <link rel="icon" type="image/svg+xml" href="image/favicon.svg">
   <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
 <div id="app">
 
-  <!-- ═══════════ SIDEBAR ═══════════ -->
+  <!-- SIDEBAR -->
   <aside id="sidebar">
     <div class="sidebar-logo">
-      <h2>📦 Centris</h2>
+      <h2>Centris</h2>
       <span>Control de Inversiones</span>
     </div>
 
     <nav class="sidebar-nav">
       <div class="nav-section-label">Principal</div>
       <button class="nav-link active" data-vista="dashboard" onclick="navigate('dashboard')">
-        <span class="nav-icon">🏠</span> Dashboard
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span> Dashboard
       </button>
       <button class="nav-link" data-vista="productos" onclick="navigate('productos')">
-        <span class="nav-icon">📦</span> Productos
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span> Productos
+      </button>
+      <button class="nav-link" data-vista="movimientos" onclick="navigate('movimientos')">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span> Movimientos
       </button>
       <button class="nav-link" data-vista="reportes" onclick="navigate('reportes')">
-        <span class="nav-icon">📊</span> Reportes
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span> Reportes
       </button>
     </nav>
 
     <div class="sidebar-footer">
-      v2.0<br>
+      v2.1<br>
       <span style="opacity:.5">Sincronización en la nube</span>
     </div>
   </aside>
 
-  <!-- ═══════════ MAIN ═══════════ -->
+  <!-- MAIN -->
   <div id="main-wrapper">
 
-    <!-- Header -->
     <header id="header">
       <div class="header-left">
-        <button id="menu-toggle">☰</button>
+        <button id="menu-toggle">
+          <svg viewBox="0 0 24 24" width="22" height="22"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
         <span class="header-title">Centris Ventas — Control de Inversiones</span>
       </div>
       <div class="header-right">
-        <div class="header-avatar">CV</div>
+        <div id="header-logo-container" class="header-logo-wrap">
+          <!-- Logo personalizable: el usuario puede subir su .png -->
+          <img id="header-logo-img" src="" alt="Logo" style="display:none; height:36px; border-radius:6px;">
+          <div id="header-avatar-fallback" class="header-avatar">CV</div>
+        </div>
+        <button class="btn-logo-upload" onclick="openLogoUpload()" title="Cambiar logo">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </button>
       </div>
     </header>
 
-    <!-- Contenido dinámico -->
-    <main id="main-content">
-      <!-- Renderizado por JavaScript -->
-    </main>
+    <main id="main-content"></main>
 
-  </div><!-- /main-wrapper -->
+  </div>
 
-</div><!-- /app -->
+</div>
 
-<!-- Modal overlay (reutilizable) -->
+<!-- Modal overlay -->
 <div id="modal-overlay"></div>
 
 <!-- Toast de notificaciones -->
 <div id="toast" class="toast"></div>
 
-<!-- ═══════════ FIREBASE SDK ═══════════ -->
+<!-- Spinner global -->
+<div id="loading-overlay" style="display:none">
+  <div class="loading-spinner-wrap">
+    <div class="spinner-ring"></div>
+    <span>Cargando...</span>
+  </div>
+</div>
+
+<!-- Action spinner (para acciones individuales) -->
+<div id="action-spinner-overlay" style="display:none">
+  <div class="action-spinner-wrap">
+    <div class="action-spinner-ring"></div>
+  </div>
+</div>
+
+<!-- Hidden file input for logo -->
+<input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
+
+<!-- FIREBASE SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-<!-- ═══════════ SCRIPTS ═══════════ -->
-<!-- Orden importante: primero Firebase config, luego datos, lógica, UI y app -->
+<!-- SCRIPTS -->
 <script src="firebase-config.js"></script>
 <script src="storage.js"></script>
 <script src="productos.js"></script>

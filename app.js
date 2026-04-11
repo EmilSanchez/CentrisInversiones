@@ -1,9 +1,9 @@
 /**
- * APP.JS — Inicialización, router y acciones globales
- * Actualizado para funcionar con Firebase (async/await)
+ * APP.JS — Inicialización, router y acciones globales v2.1
+ * Animaciones de transición · Spinner de acción · Código para eliminar · Movimientos · Logo
  */
 
-// ─── ESTADO DE LA APP ─────────────────────────────────────────────────────────
+// ─── ESTADO DE LA APP ─────────────────────────────────────────────────────
 
 const appState = {
   vistaActual: 'dashboard',
@@ -11,7 +11,7 @@ const appState = {
   filtrosProductos: {},
 };
 
-// ─── ROUTER ───────────────────────────────────────────────────────────────────
+// ─── ROUTER CON ANIMACIÓN ─────────────────────────────────────────────────
 
 async function navigate(vista, param = null) {
   appState.vistaActual = vista;
@@ -34,6 +34,9 @@ async function navigate(vista, param = null) {
       case 'detalle-producto':
         await renderDetalleProducto(param);
         break;
+      case 'movimientos':
+        await renderMovimientos();
+        break;
       case 'reportes':
         await renderReportes();
         break;
@@ -43,6 +46,11 @@ async function navigate(vista, param = null) {
       default:
         await renderDashboard();
     }
+    // Animación de entrada del módulo
+    const mainContent = document.getElementById('main-content');
+    mainContent.classList.remove('view-entering');
+    void mainContent.offsetWidth; // force reflow
+    mainContent.classList.add('view-entering');
   } catch (err) {
     console.error('Error al navegar:', err);
     mostrarAlerta('Error al cargar los datos. Verifica la conexión con Firebase.', 'error');
@@ -54,18 +62,16 @@ async function navigate(vista, param = null) {
 }
 
 function mostrarCargando(activo) {
-  let el = document.getElementById('loading-overlay');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'loading-overlay';
-    el.innerHTML = '<div class="loading-spinner">⏳ Cargando...</div>';
-    el.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#64748b;';
-    document.body.appendChild(el);
-  }
-  el.style.display = activo ? 'flex' : 'none';
+  const el = document.getElementById('loading-overlay');
+  if (el) el.style.display = activo ? 'flex' : 'none';
 }
 
-// ─── FILTROS ──────────────────────────────────────────────────────────────────
+function mostrarActionSpinner(activo) {
+  const el = document.getElementById('action-spinner-overlay');
+  if (el) el.style.display = activo ? 'flex' : 'none';
+}
+
+// ─── FILTROS ──────────────────────────────────────────────────────────────
 
 async function aplicarFiltros() {
   appState.filtrosProductos = {
@@ -77,7 +83,7 @@ async function aplicarFiltros() {
   await renderProductos(appState.filtrosProductos);
 }
 
-// ─── GUARDAR PRODUCTO ─────────────────────────────────────────────────────────
+// ─── GUARDAR PRODUCTO ─────────────────────────────────────────────────────
 
 async function guardarProducto(id) {
   const form = document.getElementById('form-producto');
@@ -94,12 +100,27 @@ async function guardarProducto(id) {
     return;
   }
 
+  mostrarActionSpinner(true);
+
   try {
     if (id) {
       await updateProducto(id, data);
       mostrarAlerta('Producto actualizado correctamente.', 'success');
     } else {
-      await addProducto(data);
+      const nuevo = await addProducto(data);
+      // Registrar movimiento de inversión inicial
+      const invTotal = (data.precioUSD * data.tasaDolar * data.cantidad) + data.envio + data.otrosCostos;
+      await addMovimiento({
+        tipo: 'inversion',
+        productoId: nuevo.id,
+        productoNombre: data.nombre,
+        descripcion: `Inversión inicial - ${data.cantidad} uds ${data.nombre}`,
+        costoProductos: data.precioUSD * data.tasaDolar * data.cantidad,
+        costoEnvio: data.envio,
+        otrosCostos: data.otrosCostos,
+        totalCOP: invTotal,
+        cantidad: data.cantidad,
+      });
       mostrarAlerta('Producto creado correctamente.', 'success');
     }
     closeModal();
@@ -107,10 +128,12 @@ async function guardarProducto(id) {
   } catch (err) {
     console.error(err);
     mostrarAlerta('Error al guardar el producto. Intenta de nuevo.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
   }
 }
 
-// ─── GUARDAR VENTA ────────────────────────────────────────────────────────────
+// ─── GUARDAR VENTA (con cliente + teléfono obligatorios) ──────────────────
 
 async function guardarVenta() {
   const form = document.getElementById('form-venta');
@@ -129,8 +152,23 @@ async function guardarVenta() {
     return;
   }
 
+  mostrarActionSpinner(true);
+
   try {
     await addVenta(data);
+
+    // Registrar movimiento de venta
+    await addMovimiento({
+      tipo: 'venta',
+      productoId: data.productoId,
+      productoNombre: p.nombre,
+      descripcion: `Venta a ${data.cliente} - ${data.cantidad} uds`,
+      costoProductos: 0,
+      costoEnvio: 0,
+      otrosCostos: 0,
+      totalCOP: data.cantidad * data.precioUnitario,
+      cantidad: data.cantidad,
+    });
 
     const nuevo = await getProductoEnriquecido(data.productoId);
     if (nuevo.stockActual === 0) {
@@ -148,70 +186,206 @@ async function guardarVenta() {
   } catch (err) {
     console.error(err);
     mostrarAlerta('Error al registrar la venta. Intenta de nuevo.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
   }
 }
 
-// ─── ELIMINAR PRODUCTO ────────────────────────────────────────────────────────
+// ─── ELIMINAR PRODUCTO (requiere código 2356) ────────────────────────────
 
 async function confirmarEliminar(id) {
-  const p = await getProductoById(id);
-  if (!confirm(`¿Eliminar el producto "${p?.nombre}"?\nTambién se eliminarán todas sus ventas. Esta acción no se puede deshacer.`)) return;
+  openModalEliminar(id);
+}
+
+async function ejecutarEliminar(id) {
+  const input = document.getElementById('delete-code-input');
+  const code = input?.value?.trim();
+
+  if (code !== '2356') {
+    mostrarAlerta('Código incorrecto. La eliminación fue cancelada.', 'error');
+    if (input) {
+      input.value = '';
+      input.style.borderColor = 'var(--red)';
+      input.focus();
+    }
+    return;
+  }
+
+  mostrarActionSpinner(true);
+
   try {
     await deleteProducto(id);
     mostrarAlerta('Producto eliminado.', 'info');
+    closeModal();
     await navigate('productos');
   } catch (err) {
     mostrarAlerta('Error al eliminar el producto.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
   }
 }
 
-// ─── ELIMINAR VENTA ───────────────────────────────────────────────────────────
+// ─── ELIMINAR VENTA ───────────────────────────────────────────────────────
 
 async function eliminarVenta(ventaId, productoId) {
   if (!confirm('¿Eliminar este registro de venta?')) return;
+
+  mostrarActionSpinner(true);
+
   try {
     await deleteVenta(ventaId);
     mostrarAlerta('Venta eliminada.', 'info');
     await renderDetalleProducto(productoId);
   } catch (err) {
     mostrarAlerta('Error al eliminar la venta.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
   }
 }
 
-// ─── ALERTAS ──────────────────────────────────────────────────────────────────
+// ─── ALERTAS (toast abajo a la derecha con ícono) ────────────────────────
 
 function mostrarAlerta(mensaje, tipo = 'info') {
   const el = document.getElementById('toast');
   if (!el) return;
-  el.textContent = mensaje;
-  el.className = `toast show toast-${tipo}`;
+
+  const iconMap = {
+    success: `<span class="toast-icon"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>`,
+    error: `<span class="toast-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></span>`,
+    info: `<span class="toast-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>`,
+  };
+
+  el.innerHTML = `${iconMap[tipo] || iconMap.info}<span>${mensaje}</span>`;
+  el.className = `toast toast-${tipo}`;
+  // Force reflow para reiniciar animación
+  void el.offsetWidth;
+  el.classList.add('show');
+
   clearTimeout(el._timer);
   el._timer = setTimeout(() => el.classList.remove('show'), 3500);
 }
 
-// ─── INIT ─────────────────────────────────────────────────────────────────────
+// ─── REPONER STOCK ────────────────────────────────────────────────────────
 
-async function init() {
+async function guardarReposicion(productoId) {
+  const form = document.getElementById('form-reposicion');
+  if (!form) return;
+
+  const d = Object.fromEntries(new FormData(form));
+  const cantNueva = parseInt(d.cantidadNueva) || 0;
+  const usdNuevo = parseFloat(d.precioUSDNuevo) || 0;
+  const tasaNueva = parseFloat(d.tasaDolarNuevo) || 0;
+  const envioNuevo = parseFloat(d.envioNuevo) || 0;
+  const otrosNuevo = parseFloat(d.otrosCostosNuevo) || 0;
+
+  if (cantNueva <= 0) { mostrarAlerta('Ingresa una cantidad válida.', 'error'); return; }
+  if (usdNuevo <= 0) { mostrarAlerta('Ingresa el precio en USD.', 'error'); return; }
+  if (tasaNueva <= 0) { mostrarAlerta('Ingresa la tasa del dólar.', 'error'); return; }
+
+  const p = await getProductoById(productoId);
+  if (!p) return;
+
+  const invAnterior = (p.precioUSD * p.tasaDolar * p.cantidad) + (p.envio || 0) + (p.otrosCostos || 0);
+  const invNuevoLote = (usdNuevo * tasaNueva * cantNueva) + envioNuevo + otrosNuevo;
+  const totalCantidad = p.cantidad + cantNueva;
+  const totalInversion = invAnterior + invNuevoLote;
+  const costoPromedioUSD = totalCantidad > 0 ? (totalInversion / tasaNueva) / totalCantidad : usdNuevo;
+
+  mostrarActionSpinner(true);
+
   try {
-    await cargarDatosDemo();
-    await navigate('dashboard');
+    await updateProducto(productoId, {
+      cantidad: totalCantidad,
+      precioUSD: parseFloat(costoPromedioUSD.toFixed(4)),
+      tasaDolar: tasaNueva,
+      envio: 0,
+      otrosCostos: 0,
+      estado: 'activo',
+    });
+
+    // Registrar movimiento de reposición
+    await addMovimiento({
+      tipo: 'reposicion',
+      productoId: productoId,
+      productoNombre: p.nombre,
+      descripcion: `Reposición - +${cantNueva} uds ${p.nombre}`,
+      costoProductos: usdNuevo * tasaNueva * cantNueva,
+      costoEnvio: envioNuevo,
+      otrosCostos: otrosNuevo,
+      totalCOP: invNuevoLote,
+      cantidad: cantNueva,
+    });
+
+    mostrarAlerta(`Stock actualizado: +${cantNueva} unidades agregadas. Nuevo total: ${totalCantidad} uds.`, 'success');
+    closeModal();
+
+    if (appState.vistaActual === 'detalle-producto') {
+      await renderDetalleProducto(productoId);
+    } else {
+      await navigate('productos');
+    }
   } catch (err) {
-    console.error('Error al inicializar la app:', err);
-    mostrarAlerta('No se pudo conectar con Firebase. Revisa la consola.', 'error');
+    console.error(err);
+    mostrarAlerta('Error al reponer el stock. Intenta de nuevo.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
   }
-
-  document.getElementById('menu-toggle')?.addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
-  });
-
-  document.getElementById('modal-overlay')?.addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
-  });
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// ─── LOGO ─────────────────────────────────────────────────────────────────
 
-// ─── DESCARGA DE REPORTES CSV ─────────────────────────────────────────────────
+function openLogoUpload() {
+  document.getElementById('logo-file-input').click();
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    const img = document.getElementById('header-logo-img');
+    const fallback = document.getElementById('header-avatar-fallback');
+    img.src = dataUrl;
+    img.style.display = 'block';
+    fallback.style.display = 'none';
+
+    // Guardar en config de Firebase
+    saveConfig({ ...(window._lastConfig || {}), logoDataUrl: dataUrl }).catch(() => {});
+    mostrarAlerta('Logo actualizado.', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function cargarLogo() {
+  try {
+    const cfg = await getConfig();
+    window._lastConfig = cfg;
+    if (cfg.logoDataUrl) {
+      const img = document.getElementById('header-logo-img');
+      const fallback = document.getElementById('header-avatar-fallback');
+      if (img && fallback) {
+        img.src = cfg.logoDataUrl;
+        img.style.display = 'block';
+        fallback.style.display = 'none';
+      }
+    }
+  } catch (e) {
+    // silently ignore
+  }
+}
+
+// ─── FIREBASE ─────────────────────────────────────────────────────────────
+
+async function marcarFirebaseConectado() {
+  const cfg = await getConfig();
+  await saveConfig({ ...cfg, firebaseConectado: true });
+  mostrarAlerta('Firebase conectado correctamente.', 'success');
+  await renderFirebase();
+}
+
+// ─── DESCARGA DE REPORTES CSV ─────────────────────────────────────────────
 
 async function descargarReporte(tipo) {
   let csv = '';
@@ -236,7 +410,7 @@ async function descargarReporte(tipo) {
 
   } else if (tipo === 'ventas') {
     filename = 'centris_ventas.csv';
-    const headers = ['Fecha','Producto','SKU','Cantidad','Precio Unitario','Total Venta','Cliente','Observacion'];
+    const headers = ['Fecha','Producto','SKU','Cantidad','Precio Unitario','Total Venta','Cliente','Telefono','Observacion'];
     csv = headers.join(sep) + '\n';
     const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
     const rows = await Promise.all(ventasOrdenadas.map(async v => {
@@ -245,7 +419,7 @@ async function descargarReporte(tipo) {
         v.fecha, p?.nombre||'Eliminado', p?.sku||'-',
         v.cantidad, v.precioUnitario,
         v.cantidad * v.precioUnitario,
-        v.cliente||'', v.obs||''
+        v.cliente||'', v.telefono||'', v.obs||''
       ].join(sep);
     }));
     csv += rows.join('\n');
@@ -288,62 +462,29 @@ async function descargarReporte(tipo) {
   mostrarAlerta(`Reporte "${filename}" descargado correctamente.`, 'success');
 }
 
-// ─── REPONER STOCK ────────────────────────────────────────────────────────────
+// ─── INIT ─────────────────────────────────────────────────────────────────
 
-async function guardarReposicion(productoId) {
-  const form = document.getElementById('form-reposicion');
-  if (!form) return;
-
-  const d = Object.fromEntries(new FormData(form));
-  const cantNueva = parseInt(d.cantidadNueva) || 0;
-  const usdNuevo = parseFloat(d.precioUSDNuevo) || 0;
-  const tasaNueva = parseFloat(d.tasaDolarNuevo) || 0;
-  const envioNuevo = parseFloat(d.envioNuevo) || 0;
-  const otrosNuevo = parseFloat(d.otrosCostosNuevo) || 0;
-
-  if (cantNueva <= 0) { mostrarAlerta('Ingresa una cantidad válida.', 'error'); return; }
-  if (usdNuevo <= 0) { mostrarAlerta('Ingresa el precio en USD.', 'error'); return; }
-  if (tasaNueva <= 0) { mostrarAlerta('Ingresa la tasa del dólar.', 'error'); return; }
-
-  const p = await getProductoById(productoId);
-  if (!p) return;
-
-  // Calcular nuevo promedio ponderado
-  const invAnterior = (p.precioUSD * p.tasaDolar * p.cantidad) + (p.envio || 0) + (p.otrosCostos || 0);
-  const invNuevoLote = (usdNuevo * tasaNueva * cantNueva) + envioNuevo + otrosNuevo;
-  const totalCantidad = p.cantidad + cantNueva;
-  const totalInversion = invAnterior + invNuevoLote;
-  const costoPromedioUSD = totalCantidad > 0 ? (totalInversion / tasaNueva) / totalCantidad : usdNuevo;
-
+async function init() {
   try {
-    await updateProducto(productoId, {
-      cantidad: totalCantidad,
-      precioUSD: parseFloat(costoPromedioUSD.toFixed(4)),
-      tasaDolar: tasaNueva,
-      envio: 0,        // Ya incorporado al promedio
-      otrosCostos: 0,  // Ya incorporado al promedio
-      estado: 'activo', // Reactivar si estaba agotado
-    });
-
-    mostrarAlerta(`✅ Stock actualizado: +${cantNueva} unidades agregadas. Nuevo total: ${totalCantidad} uds.`, 'success');
-    closeModal();
-
-    if (appState.vistaActual === 'detalle-producto') {
-      await renderDetalleProducto(productoId);
-    } else {
-      await navigate('productos');
-    }
+    await cargarDatosDemo();
+    await cargarLogo();
+    await navigate('dashboard');
   } catch (err) {
-    console.error(err);
-    mostrarAlerta('Error al reponer el stock. Intenta de nuevo.', 'error');
+    console.error('Error al inicializar la app:', err);
+    mostrarAlerta('No se pudo conectar con Firebase. Revisa la consola.', 'error');
   }
+
+  document.getElementById('menu-toggle')?.addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('open');
+  });
+
+  document.getElementById('modal-overlay')?.addEventListener('click', function(e) {
+    if (e.target !== this) return;
+    // No cerrar si hay un formulario activo (producto, venta, reposición, eliminar)
+    const tieneForm = this.querySelector('#form-producto, #form-venta, #form-reposicion, #delete-code-input');
+    if (tieneForm) return;
+    closeModal();
+  });
 }
 
-// ─── FIREBASE ─────────────────────────────────────────────────────────────────
-
-async function marcarFirebaseConectado() {
-  const cfg = await getConfig();
-  await saveConfig({ ...cfg, firebaseConectado: true });
-  mostrarAlerta('¡Firebase conectado correctamente!', 'success');
-  await renderFirebase();
-}
+document.addEventListener('DOMContentLoaded', init);

@@ -1,9 +1,24 @@
 /**
- * UI.JS — Renderizado de vistas
- * Actualizado para Firebase (async/await) + modal de reposición de stock
+ * UI.JS — Renderizado de vistas v2.1
+ * Sin emojis · Ventas con cliente+teléfono · Movimientos · Código para eliminar
  */
 
-// ─── UTILIDADES UI ────────────────────────────────────────────────────────────
+// ─── SVG ICONS ────────────────────────────────────────────────────────────
+
+const ICONS = {
+  eye: `<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  sale: `<svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
+  restock: `<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`,
+  edit: `<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  check: `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`,
+  x: `<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  info: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+  download: `<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+  box: `<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
+};
+
+// ─── UTILIDADES UI ────────────────────────────────────────────────────────
 
 const fmt = {
   cop: (n) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(n || 0),
@@ -11,6 +26,11 @@ const fmt = {
   num: (n) => new Intl.NumberFormat('es-CO').format(n || 0),
   pct: (n) => `${(n || 0).toFixed(1)}%`,
   fecha: (s) => s ? new Date(s + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—',
+  fechaHora: (s) => {
+    if (!s) return '—';
+    const d = new Date(s);
+    return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+  },
 };
 
 function badge(tipo) {
@@ -37,7 +57,11 @@ function iconoTendencia(ganancia) {
   return `<span class="trend neutral">→</span>`;
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function btnIcon(iconKey, title, onclick, extraClass = '') {
+  return `<button class="btn-icon ${extraClass}" title="${title}" onclick="${onclick}">${ICONS[iconKey]}</button>`;
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────
 
 async function renderDashboard() {
   const r = await calcularResumenGlobal();
@@ -47,7 +71,7 @@ async function renderDashboard() {
       <h1>Dashboard</h1>
       <span class="subtitle">Resumen general de inversiones</span>
       <button class="btn-download" onclick="openModalReporte()">
-        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        ${ICONS.download}
         Descargar reporte
       </button>
     </div>
@@ -64,14 +88,14 @@ async function renderDashboard() {
     <div class="dash-grid">
       <div class="card">
         <div class="card-header">
-          <h3>Últimas ventas</h3>
+          <h3>Ultimas ventas</h3>
           <button class="btn-link" onclick="navigate('productos')">Ver productos</button>
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Producto</th><th>Fecha</th><th>Cant.</th><th>Precio unit.</th><th>Total</th></tr></thead>
+            <thead><tr><th>Producto</th><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Cant.</th><th>Precio venta</th><th>Ganancia</th></tr></thead>
             <tbody>
-              ${r.ultimasVentas.length === 0 ? '<tr><td colspan="5" class="empty">Sin ventas aún</td></tr>' :
+              ${r.ultimasVentas.length === 0 ? '<tr><td colspan="7" class="empty">Sin ventas aún</td></tr>' :
                 r.ultimasVentas.map(v => `
                   <tr onclick="navigate('detalle-producto','${v.productoId}')" class="clickable">
                     <td>
@@ -81,9 +105,11 @@ async function renderDashboard() {
                       </div>
                     </td>
                     <td>${fmt.fecha(v.fecha)}</td>
+                    <td>${v.cliente || '—'}</td>
+                    <td>${v.telefono || '—'}</td>
                     <td>${v.cantidad}</td>
                     <td>${fmt.cop(v.precioUnitario)}</td>
-                    <td class="fw600">${fmt.cop(v.cantidad * v.precioUnitario)}</td>
+                    <td class="${v.gananciaVenta >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(v.gananciaVenta)}</td>
                   </tr>`).join('')}
             </tbody>
           </table>
@@ -95,7 +121,7 @@ async function renderDashboard() {
           <h3>Alertas de stock</h3>
         </div>
         ${r.productosStockBajo.length === 0
-          ? '<p class="empty-state">✓ Todo el stock está en niveles normales.</p>'
+          ? '<p class="empty-state">Todo el stock está en niveles normales.</p>'
           : `<div class="alert-list">
               ${r.productosStockBajo.map(p => `
                 <div class="alert-item ${p.estadoStock}" onclick="navigate('detalle-producto','${p.id}')">
@@ -133,7 +159,7 @@ function kpiCard(label, valor, iconKey, colorClass) {
     </div>`;
 }
 
-// ─── LISTADO PRODUCTOS ────────────────────────────────────────────────────────
+// ─── LISTADO PRODUCTOS ────────────────────────────────────────────────────
 
 async function renderProductos(filtros = {}) {
   let productos = await getProductosEnriquecidos();
@@ -219,11 +245,11 @@ async function renderProductos(filtros = {}) {
                   <td>${badge(p.estado)}</td>
                   <td>
                     <div class="action-btns">
-                      <button class="btn-icon" title="Ver" onclick="navigate('detalle-producto','${p.id}')">👁</button>
-                      <button class="btn-icon" title="Venta" onclick="openModalVenta('${p.id}')">💰</button>
-                      <button class="btn-icon" title="Reponer stock" onclick="openModalReponerStock('${p.id}')">📦</button>
-                      <button class="btn-icon" title="Editar" onclick="openModalProducto('${p.id}')">✏️</button>
-                      <button class="btn-icon btn-danger" title="Eliminar" onclick="confirmarEliminar('${p.id}')">🗑</button>
+                      ${btnIcon('eye', 'Ver', `navigate('detalle-producto','${p.id}')`)}
+                      ${btnIcon('sale', 'Venta', `openModalVenta('${p.id}')`)}
+                      ${btnIcon('restock', 'Reponer stock', `openModalReponerStock('${p.id}')`)}
+                      ${btnIcon('edit', 'Editar', `openModalProducto('${p.id}')`)}
+                      ${btnIcon('trash', 'Eliminar', `confirmarEliminar('${p.id}')`, 'btn-danger')}
                     </div>
                   </td>
                 </tr>`).join('')}
@@ -234,10 +260,9 @@ async function renderProductos(filtros = {}) {
   `;
 }
 
-// ─── DETALLE PRODUCTO ─────────────────────────────────────────────────────────
+// ─── DETALLE PRODUCTO ─────────────────────────────────────────────────────
 
 async function renderDetalleProducto(id) {
-  // Limpiar caché para obtener ventas frescas de Firebase
   _cache.productos = null;
   _cache.ventas = null;
 
@@ -249,7 +274,7 @@ async function renderDetalleProducto(id) {
       <button class="btn-back" onclick="navigate('productos')">← Volver</button>
       <h1>${p.nombre}</h1>
       <div style="display:flex;gap:8px">
-        <button class="btn-secondary" onclick="openModalReponerStock('${p.id}')">📦 Reponer stock</button>
+        <button class="btn-secondary" onclick="openModalReponerStock('${p.id}')">Reponer stock</button>
         <button class="btn-primary" onclick="openModalVenta('${p.id}')">+ Registrar venta</button>
       </div>
     </div>
@@ -265,12 +290,12 @@ async function renderDetalleProducto(id) {
           <div class="dato-row"><span>SKU</span><code class="sku">${p.sku}</code></div>
           <div class="dato-row"><span>Categoría</span>${p.categoria || '—'}</div>
           <div class="dato-row"><span>Proveedor</span>${p.proveedor || '—'}</div>
-          ${p.link ? `<div class="dato-row"><span>Link</span><a href="${p.link}" target="_blank" class="link">Ver en tienda ↗</a></div>` : ''}
+          ${p.link ? `<div class="dato-row"><span>Link</span><a href="${p.link}" target="_blank" class="link">Ver en tienda</a></div>` : ''}
           <div class="dato-row"><span>Estado</span>${badge(p.estado)}</div>
           ${p.descripcion ? `<div class="dato-row"><span>Descripción</span><em>${p.descripcion}</em></div>` : ''}
         </div>
         <div class="detalle-acciones">
-          <button class="btn-secondary" onclick="openModalProducto('${p.id}')">✏️ Editar producto</button>
+          <button class="btn-secondary" onclick="openModalProducto('${p.id}')">Editar producto</button>
         </div>
       </div>
 
@@ -311,11 +336,11 @@ async function renderDetalleProducto(id) {
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th><th>Cliente</th><th>Observación</th><th></th></tr>
+            <tr><th>Fecha</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th><th>Cliente</th><th>Teléfono</th><th>Observación</th><th></th></tr>
           </thead>
           <tbody>
             ${p.ventas.length === 0
-              ? '<tr><td colspan="7" class="empty">Sin ventas registradas</td></tr>'
+              ? '<tr><td colspan="8" class="empty">Sin ventas registradas</td></tr>'
               : [...p.ventas].sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).map(v => `
                 <tr>
                   <td>${fmt.fecha(v.fecha)}</td>
@@ -323,8 +348,9 @@ async function renderDetalleProducto(id) {
                   <td>${fmt.cop(v.precioUnitario)}</td>
                   <td class="fw600">${fmt.cop(v.cantidad * v.precioUnitario)}</td>
                   <td>${v.cliente || '—'}</td>
+                  <td>${v.telefono || '—'}</td>
                   <td class="text-muted">${v.obs || '—'}</td>
-                  <td><button class="btn-icon btn-danger" onclick="eliminarVenta('${v.id}','${p.id}')" title="Eliminar">🗑</button></td>
+                  <td>${btnIcon('trash', 'Eliminar', `eliminarVenta('${v.id}','${p.id}')`, 'btn-danger')}</td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -333,7 +359,66 @@ async function renderDetalleProducto(id) {
   `;
 }
 
-// ─── REPORTES ─────────────────────────────────────────────────────────────────
+// ─── MOVIMIENTOS ──────────────────────────────────────────────────────────
+
+async function renderMovimientos() {
+  const movimientos = await getMovimientos();
+
+  document.querySelector('#main-content').innerHTML = `
+    <div class="page-header">
+      <h1>Movimientos</h1>
+      <span class="subtitle">Historial de inversiones, reposiciones y costos</span>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha y hora</th>
+              <th>Tipo</th>
+              <th>Producto</th>
+              <th>Descripción</th>
+              <th>Costo productos</th>
+              <th>Costo envío</th>
+              <th>Otros costos</th>
+              <th>Total COP</th>
+              <th>Cant.</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${movimientos.length === 0
+              ? '<tr><td colspan="9" class="empty">Sin movimientos registrados</td></tr>'
+              : movimientos.map(m => `
+                <tr>
+                  <td style="white-space:nowrap">${fmt.fechaHora(m.fechaHora)}</td>
+                  <td><span class="mov-tipo ${m.tipo}">${tipoMovLabel(m.tipo)}</span></td>
+                  <td class="fw600">${m.productoNombre || '—'}</td>
+                  <td class="text-muted">${m.descripcion || '—'}</td>
+                  <td>${fmt.cop(m.costoProductos || 0)}</td>
+                  <td>${fmt.cop(m.costoEnvio || 0)}</td>
+                  <td>${fmt.cop(m.otrosCostos || 0)}</td>
+                  <td class="fw600">${fmt.cop(m.totalCOP || 0)}</td>
+                  <td>${m.cantidad || '—'}</td>
+                </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function tipoMovLabel(tipo) {
+  const map = {
+    inversion: 'Inversión',
+    reposicion: 'Reposición',
+    venta: 'Venta',
+    envio: 'Envío',
+  };
+  return map[tipo] || tipo;
+}
+
+// ─── REPORTES ─────────────────────────────────────────────────────────────
 
 async function renderReportes() {
   const r = await getReportes();
@@ -365,7 +450,7 @@ async function renderReportes() {
 
     <div id="rep-movimiento" class="tab-content card" style="display:none">
       <h3 class="reporte-titulo">Productos con menos movimiento</h3>
-      ${tablaRanking(r.menosMovimiento, 'numVentas', 'Nº ventas', true)}
+      ${tablaRanking(r.menosMovimiento, 'numVentas', 'N° ventas', true)}
     </div>
 
     <div id="rep-categorias" class="tab-content card" style="display:none">
@@ -391,7 +476,7 @@ async function renderReportes() {
       <h3 class="reporte-titulo">Resumen mensual de ventas</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Mes</th><th>Nº ventas</th><th>Unidades</th><th>Total ingresado</th></tr></thead>
+          <thead><tr><th>Mes</th><th>N° ventas</th><th>Unidades</th><th>Total ingresado</th></tr></thead>
           <tbody>
             ${r.meses.length === 0
               ? '<tr><td colspan="4" class="empty">Sin ventas registradas</td></tr>'
@@ -451,7 +536,7 @@ function switchTab(btn, tabId) {
   el.classList.add('active');
 }
 
-// ─── MODAL PRODUCTO ───────────────────────────────────────────────────────────
+// ─── MODAL PRODUCTO ───────────────────────────────────────────────────────
 
 async function openModalProducto(id = null) {
   const p = id ? await getProductoById(id) : null;
@@ -583,7 +668,7 @@ function calcularInversionForm() {
   if (el2) el2.textContent = fmt.cop(unit);
 }
 
-// ─── MODAL VENTA ──────────────────────────────────────────────────────────────
+// ─── MODAL VENTA (con cliente + teléfono obligatorios) ────────────────────
 
 async function openModalVenta(productoId) {
   const p = await getProductoEnriquecido(productoId);
@@ -608,6 +693,16 @@ async function openModalVenta(productoId) {
           <input type="hidden" name="productoId" value="${p.id}">
           <div class="form-row">
             <div class="form-group">
+              <label>Nombre del cliente *</label>
+              <input type="text" name="cliente" required placeholder="Nombre completo">
+            </div>
+            <div class="form-group">
+              <label>Teléfono del cliente *</label>
+              <input type="tel" name="telefono" required placeholder="Ej: 3001234567">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Fecha de venta *</label>
               <input type="date" name="fecha" value="${new Date().toISOString().split('T')[0]}" required>
             </div>
@@ -620,15 +715,9 @@ async function openModalVenta(productoId) {
             <label>Precio de venta unitario (COP) *</label>
             <input type="number" name="precioUnitario" min="1" required placeholder="${p.precioSugerido || 'Ej: 180000'}">
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Cliente / Referencia</label>
-              <input type="text" name="cliente" placeholder="Nombre o referencia opcional">
-            </div>
-            <div class="form-group">
-              <label>Observación</label>
-              <input type="text" name="obs" placeholder="Notas opcionales">
-            </div>
+          <div class="form-group">
+            <label>Observación</label>
+            <input type="text" name="obs" placeholder="Notas opcionales">
           </div>
         </form>
       </div>
@@ -641,7 +730,7 @@ async function openModalVenta(productoId) {
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
-// ─── MODAL REPONER STOCK ──────────────────────────────────────────────────────
+// ─── MODAL REPONER STOCK ──────────────────────────────────────────────────
 
 async function openModalReponerStock(productoId) {
   const p = await getProductoById(productoId);
@@ -650,7 +739,7 @@ async function openModalReponerStock(productoId) {
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal modal-sm">
       <div class="modal-header">
-        <h2>📦 Reponer stock</h2>
+        <h2>Reponer stock</h2>
         <button class="modal-close" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
@@ -664,7 +753,7 @@ async function openModalReponerStock(productoId) {
         </div>
 
         <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px;margin:12px 0;font-size:.85rem;color:#0369a1;">
-          ℹ️ Ingresa los datos del <strong>nuevo lote</strong>. Se sumarán al stock existente y se calculará el nuevo costo promedio.
+          Ingresa los datos del <strong>nuevo lote</strong>. Se sumarán al stock existente y se calculará el nuevo costo promedio.
         </div>
 
         <form id="form-reposicion" onsubmit="return false">
@@ -709,7 +798,6 @@ async function openModalReponerStock(productoId) {
     </div>
   `;
   document.getElementById('modal-overlay').style.display = 'flex';
-  // Datos del producto actual disponibles para calcularReposicion
   window._productoReposicion = p;
   setTimeout(calcularReposicion, 50);
 }
@@ -739,19 +827,42 @@ function calcularReposicion() {
   set('rep-costo-unitario', fmt.cop(costoPromedio));
 }
 
-function closeModal() {
-  document.getElementById('modal-overlay').style.display = 'none';
-  document.getElementById('modal-overlay').innerHTML = '';
-  window._productoReposicion = null;
+// ─── MODAL ELIMINAR CON CÓDIGO 2356 ──────────────────────────────────────
+
+function openModalEliminar(id) {
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Confirmar eliminación</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-confirm-msg">
+          Para eliminar este producto y todas sus ventas, ingresa el código de seguridad:
+        </p>
+        <input type="text" id="delete-code-input" class="delete-confirm-input"
+               placeholder="Código" maxlength="4" autocomplete="off">
+        <p style="text-align:center;margin-top:10px;font-size:.78rem;color:var(--text-light)">
+          Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn-primary" style="background:var(--red)" onclick="ejecutarEliminar('${id}')">Eliminar</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('delete-code-input')?.focus(), 100);
 }
 
-// ─── MODAL DESCARGA REPORTE ───────────────────────────────────────────────────
+// ─── MODAL DESCARGA REPORTE ──────────────────────────────────────────────
 
 function openModalReporte() {
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal modal-sm">
       <div class="modal-header">
-        <h2>📥 Descargar reporte</h2>
+        <h2>Descargar reporte</h2>
         <button class="modal-close" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
@@ -789,7 +900,7 @@ function openModalReporte() {
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
-// ─── VISTA FIREBASE ────────────────────────────────────────────────────────────
+// ─── VISTA FIREBASE ────────────────────────────────────────────────────────
 
 async function renderFirebase() {
   const cfg = await getConfig();
@@ -797,14 +908,14 @@ async function renderFirebase() {
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
-      <h1>🔥 Firebase</h1>
+      <h1>Firebase</h1>
       <span class="firebase-status ${conectado ? 'on' : 'off'}">
-        ${conectado ? '● Conectado' : '● Sin conectar'}
+        ${conectado ? 'Conectado' : 'Sin conectar'}
       </span>
     </div>
 
     <div class="firebase-panel">
-      <h3>🔥 Sincronización en la nube activa</h3>
+      <h3>Sincronización en la nube activa</h3>
       <p>Los datos se guardan en Firebase Firestore y se sincronizan entre todos tus dispositivos en tiempo real.</p>
     </div>
 
@@ -813,4 +924,10 @@ async function renderFirebase() {
       <button class="btn-secondary" onclick="navigate('dashboard')">Volver al dashboard</button>
     </div>
   `;
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+  document.getElementById('modal-overlay').innerHTML = '';
+  window._productoReposicion = null;
 }

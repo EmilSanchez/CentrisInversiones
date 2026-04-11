@@ -1,9 +1,9 @@
 /**
- * PRODUCTOS.JS — Lógica de productos
- * Actualizado para Firebase (async/await)
+ * PRODUCTOS.JS — Lógica de productos v2.1
+ * Actualizado: ultimasVentas ahora incluye ganancia y datos del cliente
  */
 
-// ─── CÁLCULOS ─────────────────────────────────────────────────────────────────
+// ─── CÁLCULOS ─────────────────────────────────────────────────────────────
 
 function calcularInversion(p) {
   return (p.precioUSD * p.tasaDolar * p.cantidad) + (p.envio || 0) + (p.otrosCostos || 0);
@@ -58,7 +58,7 @@ async function getProductoEnriquecido(id) {
   return enriquecerProducto(p, ventas);
 }
 
-// ─── VALIDACIÓN ───────────────────────────────────────────────────────────────
+// ─── VALIDACIÓN ───────────────────────────────────────────────────────────
 
 function validarProducto(datos) {
   const errores = [];
@@ -76,10 +76,12 @@ function validarVenta(datos, stockDisponible) {
   if (!datos.cantidad || datos.cantidad <= 0) errores.push('La cantidad debe ser mayor a 0.');
   if (datos.cantidad > stockDisponible) errores.push(`Stock insuficiente. Disponible: ${stockDisponible} unidades.`);
   if (!datos.precioUnitario || datos.precioUnitario <= 0) errores.push('El precio de venta debe ser mayor a 0.');
+  if (!datos.cliente?.trim()) errores.push('El nombre del cliente es obligatorio.');
+  if (!datos.telefono?.trim()) errores.push('El teléfono del cliente es obligatorio.');
   return errores;
 }
 
-// ─── RESUMEN GLOBAL ───────────────────────────────────────────────────────────
+// ─── RESUMEN GLOBAL ───────────────────────────────────────────────────────
 
 async function calcularResumenGlobal() {
   const productos = await getProductosEnriquecidos();
@@ -93,13 +95,19 @@ async function calcularResumenGlobal() {
   const unidadesTotalesVendidas = productos.reduce((s, p) => s + p.unidadesVendidas, 0);
   const productosStockBajo = productos.filter(p => p.estadoStock === 'bajo' || p.estadoStock === 'agotado');
 
+  // Últimas ventas con producto, nombre, telefono, ganancia
   const ultimasVentas = [...ventas]
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
     .slice(0, 8)
-    .map(v => ({
-      ...v,
-      producto: productos.find(p => p.id === v.productoId) || null,
-    }));
+    .map(v => {
+      const prod = productos.find(p => p.id === v.productoId) || null;
+      const gananciaVenta = prod ? (v.precioUnitario - prod.costoUnitario) * v.cantidad : 0;
+      return {
+        ...v,
+        producto: prod,
+        gananciaVenta,
+      };
+    });
 
   return {
     totalInvertido,
@@ -113,7 +121,7 @@ async function calcularResumenGlobal() {
   };
 }
 
-// ─── REPORTES ─────────────────────────────────────────────────────────────────
+// ─── REPORTES ─────────────────────────────────────────────────────────────
 
 async function getReportes() {
   const productos = await getProductosEnriquecidos();

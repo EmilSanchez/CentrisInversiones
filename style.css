@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   CENTRIS INVERSIONES — Hoja de estilos principal
-   Variables → Reset → Layout → Componentes → Utilidades → Responsive
+   CENTRIS INVERSIONES — Hoja de estilos v2.1
+   DM Sans · Animaciones profesionales · Sin emojis
 ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ─── VARIABLES ─────────────────────────────────────────────────────────── */
@@ -48,7 +48,7 @@
   --shadow-md: 0 4px 12px rgba(0,0,0,.1);
   --transition: all .2s ease;
 
-  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font: 'DM Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'Cascadia Code', 'Consolas', monospace;
 }
 
@@ -138,7 +138,19 @@ table { border-collapse: collapse; width: 100%; }
   background: rgba(37,99,235,.25);
   border-left-color: var(--blue);
 }
-.nav-icon { font-size: 1rem; width: 20px; text-align: center; }
+.nav-icon {
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.nav-icon svg {
+  width: 18px; height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .sidebar-footer {
   padding: 16px 20px;
@@ -168,11 +180,16 @@ table { border-collapse: collapse; width: 100%; }
   display: none;
   background: none;
   border: none;
-  font-size: 1.3rem;
   padding: 4px;
+  color: var(--text-muted);
+}
+#menu-toggle svg {
+  stroke: currentColor; fill: none; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
 }
 .header-title { font-size: .95rem; font-weight: 600; color: var(--text-muted); }
 .header-right { display: flex; align-items: center; gap: 10px; }
+.header-logo-wrap { display: flex; align-items: center; }
 .header-avatar {
   width: 34px; height: 34px;
   border-radius: 50%;
@@ -181,6 +198,17 @@ table { border-collapse: collapse; width: 100%; }
   display: flex; align-items: center; justify-content: center;
   font-weight: 700; font-size: .85rem;
 }
+.btn-logo-upload {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  color: var(--text-muted);
+  transition: var(--transition);
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-logo-upload:hover { background: var(--surface-alt); border-color: var(--blue); color: var(--blue); }
+.btn-logo-upload svg { stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Contenido principal */
 #main-wrapper {
@@ -193,6 +221,68 @@ table { border-collapse: collapse; width: 100%; }
   padding: 28px 32px;
   width: 100%;
 }
+
+/* ─── ANIMACIÓN DE TRANSICIÓN ENTRE MÓDULOS ─────────────────────────────── */
+#main-content.view-entering {
+  animation: viewEnter .35s cubic-bezier(.4,0,.2,1) forwards;
+}
+@keyframes viewEnter {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── SPINNER DE CARGA GLOBAL ────────────────────────────────────────────── */
+#loading-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(244,246,249,.85);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-spinner-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: .9rem;
+  font-weight: 500;
+}
+.spinner-ring {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── ACTION SPINNER (para guardar/registrar) ────────────────────────────── */
+#action-spinner-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(244,246,249,.6);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.action-spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.action-spinner-ring {
+  width: 44px; height: 44px;
+  border: 3px solid transparent;
+  border-top-color: var(--blue);
+  border-right-color: var(--blue);
+  border-radius: 50%;
+  animation: actionSpin .6s cubic-bezier(.4,0,.2,1) infinite;
+}
+@keyframes actionSpin { to { transform: rotate(360deg); } }
 
 /* ─── COMPONENTES REUTILIZABLES ──────────────────────────────────────────── */
 
@@ -279,7 +369,6 @@ table { border-collapse: collapse; width: 100%; }
   width: 48px; height: 48px;
   border-radius: 12px;
   background: currentColor;
-  opacity: 1;
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   position: relative;
@@ -291,7 +380,6 @@ table { border-collapse: collapse; width: 100%; }
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 1;
   position: relative; z-index: 1;
 }
 .kpi-icon-wrap::before {
@@ -395,13 +483,20 @@ code.sku {
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 4px 7px;
-  font-size: .85rem;
+  padding: 5px 8px;
   transition: var(--transition);
   color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.btn-icon:hover { background: var(--surface-alt); border-color: var(--blue); }
-.btn-icon.btn-danger:hover { background: var(--red-light); border-color: var(--red); }
+.btn-icon svg {
+  width: 15px; height: 15px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.btn-icon:hover { background: var(--surface-alt); border-color: var(--blue); color: var(--blue); }
+.btn-icon.btn-danger:hover { background: var(--red-light); border-color: var(--red); color: var(--red); }
 
 /* Alert list (dashboard) */
 .alert-list { padding: 8px 0; }
@@ -443,34 +538,6 @@ code.sku {
 }
 .firebase-panel h3 { color: #c2410c; font-size: 1rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .firebase-panel p { font-size: .875rem; color: var(--text-muted); margin-bottom: 16px; }
-.firebase-steps { counter-reset: steps; list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.firebase-steps li {
-  counter-increment: steps;
-  padding: 10px 14px 10px 44px;
-  background: #fff;
-  border: 1px solid #fed7aa;
-  border-radius: var(--radius-sm);
-  font-size: .875rem;
-  position: relative;
-}
-.firebase-steps li::before {
-  content: counter(steps);
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-  width: 22px; height: 22px;
-  background: #f97316; color: #fff;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: .75rem; font-weight: 700;
-}
-.firebase-steps code {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-family: var(--font-mono);
-  font-size: .8rem;
-  color: #9a3412;
-}
 .firebase-status {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 12px;
@@ -496,6 +563,8 @@ code.sku {
 .reporte-opt svg { width: 28px; height: 28px; stroke: var(--blue); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 8px; }
 .reporte-opt .opt-title { font-weight: 600; font-size: .875rem; margin-bottom: 3px; }
 .reporte-opt .opt-desc { font-size: .75rem; color: var(--text-muted); }
+
+/* Filtros bar */
 .filtros-bar {
   display: flex;
   gap: 12px;
@@ -666,7 +735,7 @@ code.sku {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  animation: modalIn .2s ease;
+  animation: modalIn .25s cubic-bezier(.4,0,.2,1);
 }
 .modal.modal-sm { max-width: 480px; }
 @keyframes modalIn {
@@ -720,7 +789,7 @@ code.sku {
   margin-bottom: 12px;
 }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .form-group label {
   font-size: .8rem;
   font-weight: 600;
@@ -758,22 +827,80 @@ code.sku {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  padding: 12px 20px;
-  border-radius: var(--radius-sm);
+  padding: 14px 22px;
+  border-radius: var(--radius);
   font-size: .875rem;
   font-weight: 500;
   color: #fff;
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 8px 30px rgba(0,0,0,.15);
   z-index: 999;
   opacity: 0;
-  transform: translateY(12px);
-  transition: all .3s ease;
+  transform: translateX(80px);
+  transition: all .4s cubic-bezier(.4,0,.2,1);
   pointer-events: none;
+  max-width: 380px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.toast.show { opacity: 1; transform: translateY(0); }
+.toast.show { opacity: 1; transform: translateX(0); }
 .toast-success { background: var(--green); }
 .toast-error { background: var(--red); }
 .toast-info { background: var(--slate); }
+.toast-icon {
+  width: 20px; height: 20px; flex-shrink: 0;
+}
+.toast-icon svg {
+  width: 20px; height: 20px;
+  stroke: #fff; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* ─── MOVIMIENTOS TABLE ──────────────────────────────────────────────────── */
+.movimientos-filters {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.movimientos-filters select, .movimientos-filters input {
+  height: 36px; padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: .85rem;
+  background: var(--surface);
+}
+.mov-tipo {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: .73rem; font-weight: 600;
+}
+.mov-tipo.inversion { background: var(--blue-light); color: var(--blue); }
+.mov-tipo.reposicion { background: var(--purple-light); color: var(--purple); }
+.mov-tipo.venta { background: var(--green-light); color: var(--green); }
+.mov-tipo.envio { background: var(--orange-light); color: var(--orange); }
+
+/* ─── DELETE CONFIRMATION MODAL ──────────────────────────────────────────── */
+.delete-confirm-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  letter-spacing: .15em;
+  transition: var(--transition);
+}
+.delete-confirm-input:focus {
+  outline: none;
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-light);
+}
+.delete-confirm-msg {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: .875rem;
+  margin-bottom: 16px;
+}
 
 /* ─── UTILIDADES ──────────────────────────────────────────────────────────── */
 .fw600 { font-weight: 600; }
@@ -813,12 +940,3 @@ code.sku {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .page-header { flex-direction: column; align-items: flex-start; }
 }
-/* ─── SPINNER DE CARGA ──────────────────────────────────────────────────── */
-.spinner {
-  width: 40px; height: 40px;
-  border: 3px solid var(--border);
-  border-top-color: var(--blue);
-  border-radius: 50%;
-  animation: spin .7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
