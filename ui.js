@@ -70,10 +70,6 @@ async function renderDashboard() {
     <div class="page-header">
       <h1>Dashboard</h1>
       <span class="subtitle">Resumen general de inversiones</span>
-      <button class="btn-download" onclick="openModalReporte()">
-        ${ICONS.download}
-        Descargar reporte
-      </button>
     </div>
 
     <div class="kpi-grid">
@@ -83,26 +79,6 @@ async function renderDashboard() {
       ${kpiCard('Productos', r.totalProductos, 'box', 'kpi-purple')}
       ${kpiCard('Unidades en Stock', fmt.num(r.unidadesTotalesStock), 'stock', 'kpi-orange')}
       ${kpiCard('Unidades Vendidas', fmt.num(r.unidadesTotalesVendidas), 'sold', 'kpi-slate')}
-    </div>
-
-    <!-- Accesos rápidos tipo gestor de módulos -->
-    <div class="dash-modules">
-      <div class="dash-module-card" onclick="navigate('productos')">
-        <div class="dash-module-icon blue">${KPI_ICONS.box}</div>
-        <div class="dash-module-label">Productos</div>
-      </div>
-      <div class="dash-module-card" onclick="navigate('movimientos')">
-        <div class="dash-module-icon purple"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-        <div class="dash-module-label">Movimientos</div>
-      </div>
-      <div class="dash-module-card" onclick="navigate('reportes')">
-        <div class="dash-module-icon teal"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-        <div class="dash-module-label">Reportes</div>
-      </div>
-      <div class="dash-module-card" onclick="openModalReporte()">
-        <div class="dash-module-icon green">${ICONS.download}</div>
-        <div class="dash-module-label">Descargar CSV</div>
-      </div>
     </div>
 
     <div class="dash-grid">
@@ -311,25 +287,27 @@ async function renderDetalleProducto(id) {
       ${kpiCard('Uds. vendidas', `${fmt.num(p.unidadesVendidas)} / ${p.cantidad}`, 'sold', 'kpi-purple')}
     </div>
 
-    <!-- Info del producto -->
-    <div class="detalle-info-row">
-      <div class="card detalle-info-card">
-        <div class="detalle-info-card-inner">
-          <div class="detalle-thumb">
-            ${p.imagen
-              ? `<img src="${p.imagen}" alt="${p.nombre}">`
-              : `<div class="img-placeholder" style="width:64px;height:64px;font-size:26px">${p.nombre[0].toUpperCase()}</div>`}
-          </div>
-          <div class="detalle-meta">
-            <div class="dato-inline"><span class="dato-label">SKU</span> <code class="sku">${p.sku}</code></div>
-            <div class="dato-inline"><span class="dato-label">Categoría</span> ${p.categoria || '—'}</div>
-            <div class="dato-inline"><span class="dato-label">Proveedor</span> ${p.proveedor || '—'}</div>
-            <div class="dato-inline"><span class="dato-label">Estado</span> ${badge(p.estado)} ${badge(p.estadoStock)}</div>
-            ${p.link ? `<div class="dato-inline"><span class="dato-label">Link</span> <a href="${p.link}" target="_blank" class="link">Ver en tienda</a></div>` : ''}
-            ${p.descripcion ? `<div class="dato-inline"><span class="dato-label">Descripción</span> <em class="text-muted">${p.descripcion}</em></div>` : ''}
-            <div class="dato-inline"><span class="dato-label">Precio sugerido</span> <strong>${fmt.cop(p.precioSugerido)}</strong></div>
-            <div class="dato-inline"><span class="dato-label">Recuperación</span> ${fmt.pct(p.recuperacionPct)} de la inversión</div>
-          </div>
+    <!-- Info del producto en tabla -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <h3>Información del producto</h3>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:20px;padding:20px">
+        <div style="flex-shrink:0">
+          ${p.imagen
+            ? `<img src="${p.imagen}" alt="${p.nombre}" style="width:80px;height:80px;object-fit:cover;border-radius:8px">`
+            : `<div class="img-placeholder" style="width:80px;height:80px;font-size:32px">${p.nombre[0].toUpperCase()}</div>`}
+        </div>
+        <div class="table-wrap" style="flex:1">
+          <table class="tabla-detalle">
+            <tbody>
+              <tr><td class="td-label">SKU</td><td><code class="sku">${p.sku}</code></td><td class="td-label">Categoría</td><td>${p.categoria || '—'}</td></tr>
+              <tr><td class="td-label">Proveedor</td><td>${p.proveedor || '—'}</td><td class="td-label">Estado</td><td>${badge(p.estado)} ${badge(p.estadoStock)}</td></tr>
+              <tr><td class="td-label">Precio sugerido</td><td class="fw600">${fmt.cop(p.precioSugerido)}</td><td class="td-label">Recuperación</td><td>${fmt.pct(p.recuperacionPct)} de la inversión</td></tr>
+              ${p.descripcion ? `<tr><td class="td-label">Descripción</td><td colspan="3"><em class="text-muted">${p.descripcion}</em></td></tr>` : ''}
+              ${p.link ? `<tr><td class="td-label">Link</td><td colspan="3"><a href="${p.link}" target="_blank" class="link">Ver en tienda</a></td></tr>` : ''}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -450,6 +428,10 @@ async function renderReportes() {
     <div class="page-header">
       <h1>Reportes</h1>
       <span class="subtitle">Análisis de inversiones y ventas</span>
+      <button class="btn-download" onclick="openModalReporte()">
+        ${ICONS.download}
+        Descargar reporte
+      </button>
     </div>
 
     <div class="reportes-tabs">
@@ -893,6 +875,11 @@ function openModalReporte() {
           Elige el reporte que deseas descargar en formato CSV (compatible con Excel).
         </p>
         <div class="reporte-opciones">
+          <div class="reporte-opt reporte-opt-destacado" onclick="descargarReporte('general')">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <div class="opt-title">Reporte general completo</div>
+            <div class="opt-desc">Todo en un solo archivo: inventario, ventas, stock y resumen financiero</div>
+          </div>
           <div class="reporte-opt" onclick="descargarReporte('inventario')">
             <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             <div class="opt-title">Inventario completo</div>

@@ -563,6 +563,18 @@ code.sku {
 .reporte-opt svg { width: 28px; height: 28px; stroke: var(--blue); fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 8px; }
 .reporte-opt .opt-title { font-weight: 600; font-size: .875rem; margin-bottom: 3px; }
 .reporte-opt .opt-desc { font-size: .75rem; color: var(--text-muted); }
+.reporte-opt-destacado {
+  grid-column: 1 / -1;
+  border-color: var(--green);
+  background: var(--green-light);
+}
+.reporte-opt-destacado svg { stroke: var(--green); }
+.reporte-opt-destacado:hover { border-color: var(--green); background: #bbf7d0; }
+
+/* Tabla detalle producto */
+.tabla-detalle td { padding: 8px 14px; font-size: .85rem; border-bottom: 1px solid var(--border-light); }
+.tabla-detalle tr:last-child td { border-bottom: none; }
+.td-label { color: var(--text-muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; width: 120px; }
 
 /* Filtros bar */
 .filtros-bar {

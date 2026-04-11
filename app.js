@@ -447,6 +447,70 @@ async function descargarReporte(tipo) {
         Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'
       ].join(sep);
     }).join('\n');
+
+  } else if (tipo === 'general') {
+    filename = 'centris_reporte_general.csv';
+    const fecha = new Date().toLocaleDateString('es-CO');
+
+    // Sección 1: Inventario
+    csv += `REPORTE GENERAL CENTRIS - ${fecha}\n\n`;
+    csv += `=== INVENTARIO COMPLETO ===\n`;
+    csv += ['SKU','Nombre','Categoria','Proveedor','Precio USD','Tasa','Cantidad','Envio','Otros Costos','Inversion Total','Costo Unit.','Precio Sugerido','Vendidas','Stock','Recuperado','Ganancia','Recuperacion %','Estado'].join(sep) + '\n';
+    csv += productos.map(p => [
+      p.sku, p.nombre, p.categoria||'', p.proveedor||'',
+      p.precioUSD, p.tasaDolar, p.cantidad, p.envio||0, p.otrosCostos||0,
+      Math.round(p.inversionTotal), Math.round(p.costoUnitario), p.precioSugerido||0,
+      p.unidadesVendidas, p.stockActual,
+      Math.round(p.totalRecuperado), Math.round(p.ganancia),
+      p.recuperacionPct.toFixed(1)+'%', p.estado
+    ].join(sep)).join('\n');
+
+    // Sección 2: Ventas
+    csv += '\n\n=== HISTORIAL DE VENTAS ===\n';
+    csv += ['ID Venta','Fecha','Producto','SKU','Cliente','Telefono','Cantidad','Precio Unit.','Total Venta','Observacion'].join(sep) + '\n';
+    const ventasOrdenadas2 = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
+    const rows2 = await Promise.all(ventasOrdenadas2.map(async v => {
+      const p = await getProductoById(v.productoId);
+      return [
+        v.ventaId||'', v.fecha, p?.nombre||'Eliminado', p?.sku||'-',
+        v.cliente||'', v.telefono||'', v.cantidad, v.precioUnitario,
+        v.cantidad * v.precioUnitario, v.obs||''
+      ].join(sep);
+    }));
+    csv += rows2.join('\n');
+
+    // Sección 3: Stock
+    csv += '\n\n=== ESTADO DEL STOCK ===\n';
+    csv += ['SKU','Nombre','Categoria','Compradas','Vendidas','Stock Actual','Estado Stock','Estado'].join(sep) + '\n';
+    csv += productos.map(p => [
+      p.sku, p.nombre, p.categoria||'',
+      p.cantidad, p.unidadesVendidas, p.stockActual,
+      p.estadoStock, p.estado
+    ].join(sep)).join('\n');
+
+    // Sección 4: Resumen financiero
+    csv += '\n\n=== RESUMEN FINANCIERO ===\n';
+    csv += ['SKU','Nombre','Inversion','Recuperado','Ganancia','Recuperacion %','Costo Unit.','Precio Sugerido','Margen %'].join(sep) + '\n';
+    csv += productos.map(p => {
+      const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
+      return [
+        p.sku, p.nombre,
+        Math.round(p.inversionTotal), Math.round(p.totalRecuperado),
+        Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%',
+        Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'
+      ].join(sep);
+    }).join('\n');
+
+    // Totales
+    const totInv = productos.reduce((s,p) => s + p.inversionTotal, 0);
+    const totRec = productos.reduce((s,p) => s + p.totalRecuperado, 0);
+    const totGan = productos.reduce((s,p) => s + p.ganancia, 0);
+    csv += '\n\n=== TOTALES ===\n';
+    csv += `Total Invertido${sep}${Math.round(totInv)}\n`;
+    csv += `Total Recuperado${sep}${Math.round(totRec)}\n`;
+    csv += `Ganancia Total${sep}${Math.round(totGan)}\n`;
+    csv += `Total Productos${sep}${productos.length}\n`;
+    csv += `Total Ventas${sep}${ventas.length}\n`;
   }
 
   const bom = '\uFEFF';
