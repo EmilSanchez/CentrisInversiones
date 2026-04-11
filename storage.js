@@ -72,6 +72,17 @@ async function getVentas() {
 
 async function addVenta(venta) {
   venta.creadoEn = new Date().toISOString();
+  // Generar ID de venta legible (V-0001, V-0002...)
+  if (!venta.ventaId) {
+    const snap = await db.collection('ventas').orderBy('creadoEn', 'desc').limit(1).get();
+    let nextNum = 1;
+    if (!snap.empty) {
+      const lastVentaId = snap.docs[0].data().ventaId || '';
+      const match = lastVentaId.match(/V-(\d+)/);
+      if (match) nextNum = parseInt(match[1]) + 1;
+    }
+    venta.ventaId = `V-${String(nextNum).padStart(4, '0')}`;
+  }
   const ref = await db.collection('ventas').add(venta);
   venta.id = ref.id;
   _cache.ventas = null;

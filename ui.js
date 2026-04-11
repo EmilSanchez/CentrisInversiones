@@ -1,6 +1,6 @@
 /**
- * UI.JS — Renderizado de vistas v2.1
- * Sin emojis · Ventas con cliente+teléfono · Movimientos · Código para eliminar
+ * UI.JS — Renderizado de vistas v2.2
+ * ventaId legible · Detalle producto reorganizado · Dashboard con íconos módulo
  */
 
 // ─── SVG ICONS ────────────────────────────────────────────────────────────
@@ -85,6 +85,26 @@ async function renderDashboard() {
       ${kpiCard('Unidades Vendidas', fmt.num(r.unidadesTotalesVendidas), 'sold', 'kpi-slate')}
     </div>
 
+    <!-- Accesos rápidos tipo gestor de módulos -->
+    <div class="dash-modules">
+      <div class="dash-module-card" onclick="navigate('productos')">
+        <div class="dash-module-icon blue">${KPI_ICONS.box}</div>
+        <div class="dash-module-label">Productos</div>
+      </div>
+      <div class="dash-module-card" onclick="navigate('movimientos')">
+        <div class="dash-module-icon purple"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+        <div class="dash-module-label">Movimientos</div>
+      </div>
+      <div class="dash-module-card" onclick="navigate('reportes')">
+        <div class="dash-module-icon teal"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+        <div class="dash-module-label">Reportes</div>
+      </div>
+      <div class="dash-module-card" onclick="openModalReporte()">
+        <div class="dash-module-icon green">${ICONS.download}</div>
+        <div class="dash-module-label">Descargar CSV</div>
+      </div>
+    </div>
+
     <div class="dash-grid">
       <div class="card">
         <div class="card-header">
@@ -93,11 +113,12 @@ async function renderDashboard() {
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Producto</th><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Cant.</th><th>Precio venta</th><th>Ganancia</th></tr></thead>
+            <thead><tr><th>ID Venta</th><th>Producto</th><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Cant.</th><th>Precio venta</th><th>Ganancia</th></tr></thead>
             <tbody>
-              ${r.ultimasVentas.length === 0 ? '<tr><td colspan="7" class="empty">Sin ventas aún</td></tr>' :
+              ${r.ultimasVentas.length === 0 ? '<tr><td colspan="8" class="empty">Sin ventas aún</td></tr>' :
                 r.ultimasVentas.map(v => `
                   <tr onclick="navigate('detalle-producto','${v.productoId}')" class="clickable">
+                    <td><code class="sku">${v.ventaId || '—'}</code></td>
                     <td>
                       <div class="cell-producto">
                         ${imagenProducto(v.producto?.imagen, v.producto?.nombre)}
@@ -260,7 +281,7 @@ async function renderProductos(filtros = {}) {
   `;
 }
 
-// ─── DETALLE PRODUCTO ─────────────────────────────────────────────────────
+// ─── DETALLE PRODUCTO (reorganizado: KPIs arriba, historial limpio) ───────
 
 async function renderDetalleProducto(id) {
   _cache.productos = null;
@@ -274,60 +295,46 @@ async function renderDetalleProducto(id) {
       <button class="btn-back" onclick="navigate('productos')">← Volver</button>
       <h1>${p.nombre}</h1>
       <div style="display:flex;gap:8px">
+        <button class="btn-secondary" onclick="openModalProducto('${p.id}')">Editar</button>
         <button class="btn-secondary" onclick="openModalReponerStock('${p.id}')">Reponer stock</button>
         <button class="btn-primary" onclick="openModalVenta('${p.id}')">+ Registrar venta</button>
       </div>
     </div>
 
-    <div class="detalle-grid">
-      <div class="card detalle-info">
-        <div class="detalle-imagen">
-          ${p.imagen
-            ? `<img src="${p.imagen}" alt="${p.nombre}">`
-            : `<div class="img-placeholder large">${p.nombre[0].toUpperCase()}</div>`}
-        </div>
-        <div class="detalle-datos">
-          <div class="dato-row"><span>SKU</span><code class="sku">${p.sku}</code></div>
-          <div class="dato-row"><span>Categoría</span>${p.categoria || '—'}</div>
-          <div class="dato-row"><span>Proveedor</span>${p.proveedor || '—'}</div>
-          ${p.link ? `<div class="dato-row"><span>Link</span><a href="${p.link}" target="_blank" class="link">Ver en tienda</a></div>` : ''}
-          <div class="dato-row"><span>Estado</span>${badge(p.estado)}</div>
-          ${p.descripcion ? `<div class="dato-row"><span>Descripción</span><em>${p.descripcion}</em></div>` : ''}
-        </div>
-        <div class="detalle-acciones">
-          <button class="btn-secondary" onclick="openModalProducto('${p.id}')">Editar producto</button>
-        </div>
-      </div>
+    <!-- KPI cards arriba como dashboard -->
+    <div class="kpi-grid" style="margin-bottom:20px">
+      ${kpiCard('Inversión total', fmt.cop(p.inversionTotal), 'invest', 'kpi-blue')}
+      ${kpiCard('Costo unitario', fmt.cop(p.costoUnitario), 'box', 'kpi-slate')}
+      ${kpiCard('Total recuperado', fmt.cop(p.totalRecuperado), 'recover', 'kpi-green')}
+      ${kpiCard('Ganancia', fmt.cop(p.ganancia), 'profit', p.ganancia >= 0 ? 'kpi-teal' : 'kpi-red')}
+      ${kpiCard('Stock actual', `${fmt.num(p.stockActual)} uds`, 'stock', 'kpi-orange')}
+      ${kpiCard('Uds. vendidas', `${fmt.num(p.unidadesVendidas)} / ${p.cantidad}`, 'sold', 'kpi-purple')}
+    </div>
 
-      <div class="metricas-col">
-        <div class="metrica-card blue">
-          <div class="metrica-label">Inversión total</div>
-          <div class="metrica-valor">${fmt.cop(p.inversionTotal)}</div>
-          <div class="metrica-sub">${fmt.usd(p.precioUSD)}/ud × ${fmt.num(p.tasaDolar)} + envío y costos</div>
-        </div>
-        <div class="metrica-card slate">
-          <div class="metrica-label">Costo unitario</div>
-          <div class="metrica-valor">${fmt.cop(p.costoUnitario)}</div>
-          <div class="metrica-sub">Precio sugerido: ${fmt.cop(p.precioSugerido)}</div>
-        </div>
-        <div class="metrica-card green">
-          <div class="metrica-label">Total recuperado</div>
-          <div class="metrica-valor">${fmt.cop(p.totalRecuperado)}</div>
-          <div class="metrica-sub">${fmt.pct(p.recuperacionPct)} de la inversión</div>
-        </div>
-        <div class="metrica-card ${p.ganancia >= 0 ? 'teal' : 'red'}">
-          <div class="metrica-label">Ganancia acumulada</div>
-          <div class="metrica-valor">${fmt.cop(p.ganancia)}</div>
-          <div class="metrica-sub">${p.unidadesVendidas} uds vendidas de ${p.cantidad}</div>
-        </div>
-        <div class="metrica-card orange">
-          <div class="metrica-label">Stock actual</div>
-          <div class="metrica-valor">${fmt.num(p.stockActual)} uds</div>
-          <div class="metrica-sub">${badge(p.estadoStock)}</div>
+    <!-- Info del producto -->
+    <div class="detalle-info-row">
+      <div class="card detalle-info-card">
+        <div class="detalle-info-card-inner">
+          <div class="detalle-thumb">
+            ${p.imagen
+              ? `<img src="${p.imagen}" alt="${p.nombre}">`
+              : `<div class="img-placeholder" style="width:64px;height:64px;font-size:26px">${p.nombre[0].toUpperCase()}</div>`}
+          </div>
+          <div class="detalle-meta">
+            <div class="dato-inline"><span class="dato-label">SKU</span> <code class="sku">${p.sku}</code></div>
+            <div class="dato-inline"><span class="dato-label">Categoría</span> ${p.categoria || '—'}</div>
+            <div class="dato-inline"><span class="dato-label">Proveedor</span> ${p.proveedor || '—'}</div>
+            <div class="dato-inline"><span class="dato-label">Estado</span> ${badge(p.estado)} ${badge(p.estadoStock)}</div>
+            ${p.link ? `<div class="dato-inline"><span class="dato-label">Link</span> <a href="${p.link}" target="_blank" class="link">Ver en tienda</a></div>` : ''}
+            ${p.descripcion ? `<div class="dato-inline"><span class="dato-label">Descripción</span> <em class="text-muted">${p.descripcion}</em></div>` : ''}
+            <div class="dato-inline"><span class="dato-label">Precio sugerido</span> <strong>${fmt.cop(p.precioSugerido)}</strong></div>
+            <div class="dato-inline"><span class="dato-label">Recuperación</span> ${fmt.pct(p.recuperacionPct)} de la inversión</div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Historial de ventas -->
     <div class="card mt20">
       <div class="card-header">
         <h3>Historial de ventas</h3>
@@ -336,22 +343,38 @@ async function renderDetalleProducto(id) {
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th><th>Cliente</th><th>Teléfono</th><th>Observación</th><th></th></tr>
+            <tr>
+              <th>Fecha</th>
+              <th>ID Venta</th>
+              <th>Cliente</th>
+              <th>Teléfono</th>
+              <th>Cant.</th>
+              <th>Observación</th>
+              <th>Costo unit.</th>
+              <th>Precio venta</th>
+              <th>Ganancia</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             ${p.ventas.length === 0
-              ? '<tr><td colspan="8" class="empty">Sin ventas registradas</td></tr>'
-              : [...p.ventas].sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).map(v => `
-                <tr>
-                  <td>${fmt.fecha(v.fecha)}</td>
-                  <td>${v.cantidad}</td>
-                  <td>${fmt.cop(v.precioUnitario)}</td>
-                  <td class="fw600">${fmt.cop(v.cantidad * v.precioUnitario)}</td>
-                  <td>${v.cliente || '—'}</td>
-                  <td>${v.telefono || '—'}</td>
-                  <td class="text-muted">${v.obs || '—'}</td>
-                  <td>${btnIcon('trash', 'Eliminar', `eliminarVenta('${v.id}','${p.id}')`, 'btn-danger')}</td>
-                </tr>`).join('')}
+              ? '<tr><td colspan="10" class="empty">Sin ventas registradas</td></tr>'
+              : [...p.ventas].sort((a,b) => new Date(b.fecha) - new Date(a.fecha)).map(v => {
+                  const gananciaV = (v.precioUnitario - p.costoUnitario) * v.cantidad;
+                  return `
+                  <tr>
+                    <td>${fmt.fecha(v.fecha)}</td>
+                    <td><code class="sku">${v.ventaId || '—'}</code></td>
+                    <td>${v.cliente || '—'}</td>
+                    <td>${v.telefono || '—'}</td>
+                    <td>${v.cantidad}</td>
+                    <td class="text-muted">${v.obs || '—'}</td>
+                    <td>${fmt.cop(p.costoUnitario)}</td>
+                    <td>${fmt.cop(v.precioUnitario)}</td>
+                    <td class="${gananciaV >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(gananciaV)}</td>
+                    <td>${btnIcon('trash', 'Eliminar', `eliminarVenta('${v.id}','${p.id}')`, 'btn-danger')}</td>
+                  </tr>`;
+                }).join('')}
           </tbody>
         </table>
       </div>

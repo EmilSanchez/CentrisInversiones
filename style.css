@@ -913,6 +913,89 @@ code.sku {
 .link { color: var(--blue); font-size: .85rem; }
 .empty-state { padding: 24px 20px; color: var(--text-muted); font-style: italic; font-size: .9rem; }
 
+/* ─── DASHBOARD MODULE CARDS ─────────────────────────────────────────────── */
+.dash-modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.dash-module-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow);
+}
+.dash-module-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  border-color: var(--blue);
+}
+.dash-module-icon {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.dash-module-icon svg {
+  width: 24px; height: 24px;
+  stroke: #fff; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.dash-module-icon.blue { background: var(--blue); }
+.dash-module-icon.green { background: var(--green); }
+.dash-module-icon.purple { background: var(--purple); }
+.dash-module-icon.teal { background: var(--teal); }
+.dash-module-icon.orange { background: var(--orange); }
+.dash-module-label {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ─── DETALLE PRODUCTO INFO ROW ──────────────────────────────────────────── */
+.detalle-info-row {
+  margin-bottom: 0;
+}
+.detalle-info-card {
+  padding: 20px;
+}
+.detalle-info-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+.detalle-thumb img {
+  width: 64px; height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+.detalle-meta {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+.dato-inline {
+  font-size: .85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dato-label {
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
 /* ─── RESPONSIVE ──────────────────────────────────────────────────────────── */
 @media (max-width: 960px) {
   .detalle-grid { grid-template-columns: 1fr; }
