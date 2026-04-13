@@ -76,8 +76,7 @@ function validarVenta(datos, stockDisponible) {
   if (!datos.cantidad || datos.cantidad <= 0) errores.push('La cantidad debe ser mayor a 0.');
   if (datos.cantidad > stockDisponible) errores.push(`Stock insuficiente. Disponible: ${stockDisponible} unidades.`);
   if (!datos.precioUnitario || datos.precioUnitario <= 0) errores.push('El precio de venta debe ser mayor a 0.');
-  if (!datos.cliente?.trim()) errores.push('El nombre del cliente es obligatorio.');
-  if (!datos.telefono?.trim()) errores.push('El teléfono del cliente es obligatorio.');
+
   return errores;
 }
 
