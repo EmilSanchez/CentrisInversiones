@@ -713,12 +713,12 @@ async function openModalVenta(productoId) {
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Nombre del cliente *</label>
-              <input type="text" name="cliente" required placeholder="Nombre completo">
+              <label>Nombre del cliente</label>
+              <input type="text" name="cliente" placeholder="Nombre completo">
             </div>
             <div class="form-group">
-              <label>Teléfono del cliente *</label>
-              <input type="tel" name="telefono" required placeholder="Ej: 3001234567">
+              <label>Teléfono del cliente</label>
+              <input type="tel" name="telefono" placeholder="Ej: 3001234567">
             </div>
           </div>
           <div class="form-row">
@@ -793,12 +793,12 @@ async function openModalEditarVenta(ventaId, productoId) {
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Nombre del cliente *</label>
-              <input type="text" name="cliente" required placeholder="Nombre completo" value="${venta.cliente || ''}">
+              <label>Nombre del cliente</label>
+              <input type="text" name="cliente" placeholder="Nombre completo" value="${venta.cliente || ''}">
             </div>
             <div class="form-group">
-              <label>Teléfono del cliente *</label>
-              <input type="tel" name="telefono" required placeholder="Ej: 3001234567" value="${venta.telefono || ''}">
+              <label>Teléfono del cliente</label>
+              <input type="tel" name="telefono" placeholder="Ej: 3001234567" value="${venta.telefono || ''}">
             </div>
           </div>
             <div class="form-group">
