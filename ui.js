@@ -657,7 +657,7 @@ async function openModalProducto(id = null) {
       </div>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'flex';
+  openModalAnimate();
   if (p) setTimeout(calcularInversionForm, 50);
 }
 
@@ -747,7 +747,7 @@ async function openModalVenta(productoId) {
       </div>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'flex';
+  openModalAnimate();
 }
 
 // ─── MODAL EDITAR VENTA ──────────────────────────────────────────────────
@@ -822,7 +822,7 @@ async function openModalEditarVenta(ventaId, productoId) {
       </div>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'flex';
+  openModalAnimate();
 }
 
 // ─── MODAL REPONER STOCK ──────────────────────────────────────────────────
@@ -892,7 +892,7 @@ async function openModalReponerStock(productoId) {
       </div>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'flex';
+  openModalAnimate();
   window._productoReposicion = p;
   setTimeout(calcularReposicion, 50);
 }
@@ -947,7 +947,7 @@ function openModalEliminar(id) {
       </div>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'flex';
+  openModalAnimate();
   setTimeout(() => document.getElementById('delete-code-input')?.focus(), 100);
 }
 
@@ -997,7 +997,7 @@ function openModalReporte() {
       </div>
     </div>
   `;
-  document.getElementById('modal-overlay').style.display = 'flex';
+  openModalAnimate();
 }
 
 // ─── VISTA FIREBASE ────────────────────────────────────────────────────────
@@ -1026,8 +1026,27 @@ async function renderFirebase() {
   `;
 }
 
+function openModalAnimate() {
+  const overlay = document.getElementById('modal-overlay');
+  overlay.style.display = 'flex';
+  // Trigger reflow so transition starts from initial state
+  overlay.getBoundingClientRect();
+  overlay.classList.remove('modal-closing');
+  overlay.classList.add('modal-entering');
+}
+
 function closeModal() {
-  document.getElementById('modal-overlay').style.display = 'none';
-  document.getElementById('modal-overlay').innerHTML = '';
-  window._productoReposicion = null;
+  const overlay = document.getElementById('modal-overlay');
+  const modal = overlay.querySelector('.modal');
+
+  overlay.classList.remove('modal-entering');
+  overlay.classList.add('modal-closing');
+  if (modal) modal.classList.add('modal-out');
+
+  setTimeout(() => {
+    overlay.style.display = 'none';
+    overlay.classList.remove('modal-closing');
+    overlay.innerHTML = '';
+    window._productoReposicion = null;
+  }, 220);
 }

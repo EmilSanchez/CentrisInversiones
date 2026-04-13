@@ -732,27 +732,59 @@ code.sku {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.45);
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
   z-index: 200;
   align-items: center;
   justify-content: center;
   padding: 20px;
+  transition: background 0.3s ease, backdrop-filter 0.3s ease;
+}
+#modal-overlay.modal-entering {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+#modal-overlay.modal-closing {
+  background: rgba(0, 0, 0, 0) !important;
+  backdrop-filter: blur(0px) !important;
+  -webkit-backdrop-filter: blur(0px) !important;
 }
 .modal {
   background: var(--surface);
   border-radius: var(--radius);
-  box-shadow: 0 20px 60px rgba(0,0,0,.2);
+  box-shadow: 0 24px 80px rgba(0,0,0,.22), 0 4px 16px rgba(0,0,0,.10);
   width: 100%;
   max-width: 640px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  animation: modalIn .25s cubic-bezier(.4,0,.2,1);
+  animation: modalIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.modal.modal-out {
+  animation: modalOut 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 .modal.modal-sm { max-width: 480px; }
 @keyframes modalIn {
-  from { opacity: 0; transform: scale(.96) translateY(8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+@keyframes modalOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
 }
 .modal-header {
   display: flex;
