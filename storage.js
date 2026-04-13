@@ -94,6 +94,13 @@ async function getVentasByProducto(productoId) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+async function updateVenta(id, datos) {
+  datos.actualizadoEn = new Date().toISOString();
+  await db.collection('ventas').doc(id).update(datos);
+  _cache.ventas = null;
+  return { id, ...datos };
+}
+
 async function deleteVenta(id) {
   await db.collection('ventas').doc(id).delete();
   _cache.ventas = null;

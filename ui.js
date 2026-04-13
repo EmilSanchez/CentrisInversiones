@@ -350,7 +350,12 @@ async function renderDetalleProducto(id) {
                     <td>${fmt.cop(p.costoUnitario)}</td>
                     <td>${fmt.cop(v.precioUnitario)}</td>
                     <td class="${gananciaV >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(gananciaV)}</td>
-                    <td>${btnIcon('trash', 'Eliminar', `eliminarVenta('${v.id}','${p.id}')`, 'btn-danger')}</td>
+                    <td>
+                      <div class="action-btns">
+                        ${btnIcon('edit', 'Editar venta', `openModalEditarVenta('${v.id}','${p.id}')`)}
+                        ${btnIcon('trash', 'Eliminar', `eliminarVenta('${v.id}','${p.id}')`, 'btn-danger')}
+                      </div>
+                    </td>
                   </tr>`;
                 }).join('')}
           </tbody>
@@ -729,6 +734,76 @@ async function openModalVenta(productoId) {
       <div class="modal-footer">
         <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
         <button class="btn-primary" onclick="guardarVenta()">Registrar venta</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+// ─── MODAL EDITAR VENTA ──────────────────────────────────────────────────
+
+async function openModalEditarVenta(ventaId, productoId) {
+  const p = await getProductoEnriquecido(productoId);
+  if (!p) return;
+
+  const venta = p.ventas.find(v => v.id === ventaId);
+  if (!venta) { mostrarAlerta('Venta no encontrada.', 'error'); return; }
+
+  // Stock disponible = stock actual + la cantidad de esta venta (porque al editar se "devuelve")
+  const stockDisponible = p.stockActual + venta.cantidad;
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Editar venta <code class="sku">${venta.ventaId || '—'}</code></h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="venta-producto-info">
+          ${imagenProducto(p.imagen, p.nombre, 48)}
+          <div>
+            <div class="fw600">${p.nombre}</div>
+            <div class="small-text text-muted">Stock disponible: <strong>${stockDisponible}</strong> unidades</div>
+            <div class="small-text text-muted">Precio sugerido: ${fmt.cop(p.precioSugerido)}</div>
+          </div>
+        </div>
+        <form id="form-editar-venta" onsubmit="return false">
+          <input type="hidden" name="ventaId" value="${ventaId}">
+          <input type="hidden" name="productoId" value="${productoId}">
+          <input type="hidden" name="stockDisponible" value="${stockDisponible}">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nombre del cliente *</label>
+              <input type="text" name="cliente" required placeholder="Nombre completo" value="${venta.cliente || ''}">
+            </div>
+            <div class="form-group">
+              <label>Teléfono del cliente *</label>
+              <input type="tel" name="telefono" required placeholder="Ej: 3001234567" value="${venta.telefono || ''}">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Fecha de venta *</label>
+              <input type="date" name="fecha" value="${venta.fecha || ''}" required>
+            </div>
+            <div class="form-group">
+              <label>Cantidad *</label>
+              <input type="number" name="cantidad" min="1" max="${stockDisponible}" required value="${venta.cantidad || ''}">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Precio de venta unitario (COP) *</label>
+            <input type="number" name="precioUnitario" min="1" required value="${venta.precioUnitario || ''}">
+          </div>
+          <div class="form-group">
+            <label>Observación</label>
+            <input type="text" name="obs" placeholder="Notas opcionales" value="${venta.obs || ''}">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn-primary" onclick="guardarEdicionVenta()">Guardar cambios</button>
       </div>
     </div>
   `;

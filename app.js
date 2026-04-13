@@ -243,6 +243,62 @@ async function eliminarVenta(ventaId, productoId) {
   }
 }
 
+// ─── EDITAR VENTA ─────────────────────────────────────────────────────────
+
+async function guardarEdicionVenta() {
+  const form = document.getElementById('form-editar-venta');
+  if (!form) return;
+
+  const data = Object.fromEntries(new FormData(form));
+  data.cantidad = parseInt(data.cantidad) || 0;
+  data.precioUnitario = parseFloat(data.precioUnitario) || 0;
+  const stockDisponible = parseInt(data.stockDisponible) || 0;
+
+  const errores = validarVenta(data, stockDisponible);
+  if (errores.length) {
+    mostrarAlerta(errores.join('\n'), 'error');
+    return;
+  }
+
+  mostrarActionSpinner(true);
+
+  try {
+    await updateVenta(data.ventaId, {
+      fecha: data.fecha,
+      cantidad: data.cantidad,
+      precioUnitario: data.precioUnitario,
+      cliente: data.cliente,
+      telefono: data.telefono,
+      obs: data.obs || '',
+    });
+
+    // Verificar si el producto quedó agotado o tiene stock
+    const nuevo = await getProductoEnriquecido(data.productoId);
+    if (nuevo.stockActual === 0) {
+      await updateProducto(data.productoId, { estado: 'agotado' });
+    } else if (nuevo.stockActual > 0) {
+      const pActual = await getProductoById(data.productoId);
+      if (pActual.estado === 'agotado') {
+        await updateProducto(data.productoId, { estado: 'activo' });
+      }
+    }
+
+    mostrarAlerta('Venta actualizada correctamente.', 'success');
+    closeModal();
+
+    if (appState.vistaActual === 'detalle-producto') {
+      await renderDetalleProducto(data.productoId);
+    } else {
+      await navigate('productos');
+    }
+  } catch (err) {
+    console.error(err);
+    mostrarAlerta('Error al actualizar la venta. Intenta de nuevo.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
+  }
+}
+
 // ─── ALERTAS (toast abajo a la derecha con ícono) ────────────────────────
 
 function mostrarAlerta(mensaje, tipo = 'info') {
