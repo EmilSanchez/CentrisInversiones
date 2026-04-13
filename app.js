@@ -600,13 +600,7 @@ async function init() {
     document.getElementById('sidebar').classList.toggle('open');
   });
 
-  document.getElementById('modal-overlay')?.addEventListener('click', function(e) {
-    if (e.target !== this) return;
-    // No cerrar si hay un formulario activo (producto, venta, reposición, eliminar)
-    const tieneForm = this.querySelector('#form-producto, #form-venta, #form-reposicion, #delete-code-input');
-    if (tieneForm) return;
-    closeModal();
-  });
+  // El modal no se cierra al hacer clic fuera de él
 }
 
 document.addEventListener('DOMContentLoaded', init);
