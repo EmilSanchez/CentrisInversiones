@@ -733,23 +733,17 @@ code.sku {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0);
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
   z-index: 200;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  transition: background 0.3s ease, backdrop-filter 0.3s ease;
+  transition: background 0.3s ease;
 }
 #modal-overlay.modal-entering {
   background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 #modal-overlay.modal-closing {
   background: rgba(0, 0, 0, 0) !important;
-  backdrop-filter: blur(0px) !important;
-  -webkit-backdrop-filter: blur(0px) !important;
 }
 .modal {
   background: var(--surface);

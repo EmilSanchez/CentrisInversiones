@@ -805,7 +805,6 @@ async function openModalEditarVenta(ventaId, productoId) {
               <label>Cantidad *</label>
               <input type="number" name="cantidad" min="1" max="${stockDisponible}" required value="${venta.cantidad || ''}">
             </div>
-          </div>
           <div class="form-group">
             <label>Precio de venta unitario (COP) *</label>
             <input type="number" name="precioUnitario" min="1" required value="${venta.precioUnitario || ''}">
