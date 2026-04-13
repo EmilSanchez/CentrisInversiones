@@ -142,6 +142,7 @@ async function guardarVenta() {
   const data = Object.fromEntries(new FormData(form));
   data.cantidad = parseInt(data.cantidad) || 0;
   data.precioUnitario = parseFloat(data.precioUnitario) || 0;
+  if (!data.ventaId?.trim()) delete data.ventaId;
 
   const p = await getProductoEnriquecido(data.productoId);
   if (!p) return;
@@ -264,6 +265,7 @@ async function guardarEdicionVenta() {
 
   try {
     await updateVenta(data.ventaId, {
+      ventaId: data.ventaIdLegible || '',
       fecha: data.fecha,
       cantidad: data.cantidad,
       precioUnitario: data.precioUnitario,

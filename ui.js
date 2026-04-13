@@ -703,6 +703,16 @@ async function openModalVenta(productoId) {
           <input type="hidden" name="productoId" value="${p.id}">
           <div class="form-row">
             <div class="form-group">
+              <label>ID de venta</label>
+              <input type="text" name="ventaId" placeholder="Auto: V-0001 (opcional)">
+            </div>
+            <div class="form-group">
+              <label>Fecha de venta *</label>
+              <input type="date" name="fecha" value="${new Date().toISOString().split('T')[0]}" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Nombre del cliente *</label>
               <input type="text" name="cliente" required placeholder="Nombre completo">
             </div>
@@ -773,6 +783,16 @@ async function openModalEditarVenta(ventaId, productoId) {
           <input type="hidden" name="stockDisponible" value="${stockDisponible}">
           <div class="form-row">
             <div class="form-group">
+              <label>ID de venta</label>
+              <input type="text" name="ventaIdLegible" value="${venta.ventaId || ''}" placeholder="Ej: V-0001">
+            </div>
+            <div class="form-group">
+              <label>Fecha de venta *</label>
+              <input type="date" name="fecha" value="${venta.fecha || ''}" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label>Nombre del cliente *</label>
               <input type="text" name="cliente" required placeholder="Nombre completo" value="${venta.cliente || ''}">
             </div>
@@ -781,11 +801,6 @@ async function openModalEditarVenta(ventaId, productoId) {
               <input type="tel" name="telefono" required placeholder="Ej: 3001234567" value="${venta.telefono || ''}">
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Fecha de venta *</label>
-              <input type="date" name="fecha" value="${venta.fecha || ''}" required>
-            </div>
             <div class="form-group">
               <label>Cantidad *</label>
               <input type="number" name="cantidad" min="1" max="${stockDisponible}" required value="${venta.cantidad || ''}">
