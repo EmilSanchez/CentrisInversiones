@@ -81,13 +81,13 @@ async function renderDashboard() {
       ${kpiCard('Unidades Vendidas', fmt.num(r.unidadesTotalesVendidas), 'sold', 'kpi-slate')}
     </div>
 
-    <div class="dash-grid">
+    <div class="dash-grid" style="grid-template-columns: 1fr;">
       <div class="card">
         <div class="card-header">
-          <h3>Ultimas ventas</h3>
+          <h3>Historial completo de ventas</h3>
           <button class="btn-link" onclick="navigate('productos')">Ver productos</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" style="max-height: 560px; overflow-y: auto;">
           <table>
             <thead><tr><th>ID Venta</th><th>Producto</th><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Cant.</th><th>Precio venta</th><th>Ganancia</th></tr></thead>
             <tbody>
@@ -112,26 +112,19 @@ async function renderDashboard() {
           </table>
         </div>
       </div>
+    </div>
 
-      <div class="card">
-        <div class="card-header">
-          <h3>Alertas de stock</h3>
-        </div>
-        ${r.productosStockBajo.length === 0
-          ? '<p class="empty-state">Todo el stock está en niveles normales.</p>'
-          : `<div class="alert-list">
-              ${r.productosStockBajo.map(p => `
-                <div class="alert-item ${p.estadoStock}" onclick="navigate('detalle-producto','${p.id}')">
-                  ${imagenProducto(p.imagen, p.nombre, 36)}
-                  <div>
-                    <div class="fw600">${p.nombre}</div>
-                    <div class="small-text">Stock: ${p.stockActual} uds. ${badge(p.estadoStock)}</div>
-                  </div>
-                </div>`).join('')}
-            </div>`}
-      </div>
+      ${r.productosStockBajo.length > 0 ? `
+        <button class="stock-alert-fab" onclick="openModalAlertas()" title="Ver alertas de stock">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+          <span class="stock-alert-count">${r.productosStockBajo.length}</span>
+        </button>` : ''}
     </div>
   `;
+  window._productosStockBajo = r.productosStockBajo; 
 }
 
 // SVG icons por tipo de KPI
@@ -222,7 +215,7 @@ async function renderProductos(filtros = {}) {
             ${productos.length === 0
               ? '<tr><td colspan="10" class="empty">No se encontraron productos</td></tr>'
               : productos.map(p => `
-                <tr>
+                <tr class="clickable" onclick="navigate('detalle-producto','${p.id}')">
                   <td>
                     <div class="cell-producto">
                       ${imagenProducto(p.imagen, p.nombre, 36)}
@@ -241,8 +234,7 @@ async function renderProductos(filtros = {}) {
                   <td class="${p.ganancia >= 0 ? 'text-success' : 'text-danger'}">${iconoTendencia(p.ganancia)} ${fmt.cop(p.ganancia)}</td>
                   <td>${badge(p.estado)}</td>
                   <td>
-                    <div class="action-btns">
-                      ${btnIcon('eye', 'Ver', `navigate('detalle-producto','${p.id}')`)}
+                    <div class="action-btns" onclick="event.stopPropagation()">
                       ${btnIcon('sale', 'Venta', `openModalVenta('${p.id}')`)}
                       ${btnIcon('restock', 'Reponer stock', `openModalReponerStock('${p.id}')`)}
                       ${btnIcon('edit', 'Editar', `openModalProducto('${p.id}')`)}
@@ -260,6 +252,7 @@ async function renderProductos(filtros = {}) {
 // ─── DETALLE PRODUCTO (reorganizado: KPIs arriba, historial limpio) ───────
 
 async function renderDetalleProducto(id) {
+  startProgress();
   _cache.productos = null;
   _cache.ventas = null;
 
@@ -306,6 +299,7 @@ async function renderDetalleProducto(id) {
               <tr><td class="td-label">Precio sugerido</td><td class="fw600">${fmt.cop(p.precioSugerido)}</td><td class="td-label">Recuperación</td><td>${fmt.pct(p.recuperacionPct)} de la inversión</td></tr>
               ${p.descripcion ? `<tr><td class="td-label">Descripción</td><td colspan="3"><em class="text-muted">${p.descripcion}</em></td></tr>` : ''}
               ${p.link ? `<tr><td class="td-label">Link</td><td colspan="3"><a href="${p.link}" target="_blank" class="link">Ver en tienda</a></td></tr>` : ''}
+              ${p.ubicacion ? `<tr><td class="td-label">Ubicación bodega</td><td colspan="3">${p.ubicacion}</td></tr>` : ''}
             </tbody>
           </table>
         </div>
@@ -363,6 +357,58 @@ async function renderDetalleProducto(id) {
       </div>
     </div>
   `;
+  doneProgress();
+}
+
+async function openModalEditarMovimiento(movId) {
+  startProgress();
+  const movimientos = await getMovimientos();
+  const m = movimientos.find(x => x.id === movId);
+  if (!m) { mostrarAlerta('Movimiento no encontrado.', 'error'); return; }
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Editar movimiento</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-editar-mov" onsubmit="return false">
+          <input type="hidden" name="movId" value="${m.id}">
+          <div class="form-group">
+            <label>Descripción</label>
+            <input type="text" name="descripcion" value="${m.descripcion || ''}">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Costo productos (COP)</label>
+              <input type="number" name="costoProductos" value="${m.costoProductos || 0}" min="0">
+            </div>
+            <div class="form-group">
+              <label>Costo envío (COP)</label>
+              <input type="number" name="costoEnvio" value="${m.costoEnvio || 0}" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Otros costos (COP)</label>
+              <input type="number" name="otrosCostos" value="${m.otrosCostos || 0}" min="0">
+            </div>
+            <div class="form-group">
+              <label>Cantidad</label>
+              <input type="number" name="cantidad" value="${m.cantidad || 0}" min="0">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn-primary" onclick="guardarEdicionMovimiento()">Guardar cambios</button>
+      </div>
+    </div>
+  `;
+  openModalAnimate();
+  doneProgress();
 }
 
 // ─── MOVIMIENTOS ──────────────────────────────────────────────────────────
@@ -389,8 +435,10 @@ async function renderMovimientos() {
               <th>Costo envío</th>
               <th>Otros costos</th>
               <th>Total COP</th>
-              <th>Cant.</th>
+              <th>Cant.</th>     
+              <th style="width:48px"></th>         
             </tr>
+            
           </thead>
           <tbody>
             ${movimientos.length === 0
@@ -406,6 +454,11 @@ async function renderMovimientos() {
                   <td>${fmt.cop(m.otrosCostos || 0)}</td>
                   <td class="fw600">${fmt.cop(m.totalCOP || 0)}</td>
                   <td>${m.cantidad || '—'}</td>
+                  <td>
+                    <div class="action-btns">
+                      ${btnIcon('edit', 'Editar', `openModalEditarMovimiento('${m.id}')`)}
+                    </div>
+                  </td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -549,6 +602,7 @@ function switchTab(btn, tabId) {
 // ─── MODAL PRODUCTO ───────────────────────────────────────────────────────
 
 async function openModalProducto(id = null) {
+  startProgress();
   const p = id ? await getProductoById(id) : null;
   const cfg = await getConfig();
   const titulo = p ? 'Editar producto' : 'Nuevo producto';
@@ -595,6 +649,12 @@ async function openModalProducto(id = null) {
               <label>URL de imagen</label>
               <input type="text" id="campo-imagen" name="imagen" value="${p?.imagen || ''}" placeholder="https://… o pega una imagen en base64">
               <small>Puedes pegar un URL de imagen o base64</small>
+            </div>
+            <div class="form-group">
+              <label>Ubicación en bodega</label>
+              <input type="text" name="ubicacion" value="${p?.ubicacion || ''}"
+                placeholder="Ej: Piso 2, Estante 3, Sección A">
+              <small>Indica dónde está físicamente el producto</small>
             </div>
           </div>
 
@@ -659,6 +719,7 @@ async function openModalProducto(id = null) {
   `;
   openModalAnimate();
   if (p) setTimeout(calcularInversionForm, 50);
+  doneProgress();
 }
 
 function calcularInversionForm() {
@@ -681,6 +742,7 @@ function calcularInversionForm() {
 // ─── MODAL VENTA (con cliente + teléfono obligatorios) ────────────────────
 
 async function openModalVenta(productoId) {
+  startProgress();
   const p = await getProductoEnriquecido(productoId);
   if (!p) return;
 
@@ -748,11 +810,46 @@ async function openModalVenta(productoId) {
     </div>
   `;
   openModalAnimate();
+  doneProgress();
+}
+
+
+function openModalAlertas() {
+  startProgress();
+  const lista = window._productosStockBajo || [];
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Alertas de stock (${lista.length})</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="alert-list">
+          ${lista.map(p => `
+            <div class="alert-item ${p.estadoStock}"
+                 onclick="closeModal(); navigate('detalle-producto','${p.id}')">
+              ${imagenProducto(p.imagen, p.nombre, 36)}
+              <div>
+                <div class="fw600">${p.nombre}</div>
+                <div class="small-text">Stock: <strong>${p.stockActual} uds.</strong> ${badge(p.estadoStock)}</div>
+                ${p.ubicacion ? `<div class="small-text text-muted">📦 ${p.ubicacion}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cerrar</button>
+      </div>
+    </div>
+  `;
+  openModalAnimate();
+  doneProgress();
 }
 
 // ─── MODAL EDITAR VENTA ──────────────────────────────────────────────────
 
 async function openModalEditarVenta(ventaId, productoId) {
+  startProgress();
   const p = await getProductoEnriquecido(productoId);
   if (!p) return;
 
@@ -822,11 +919,13 @@ async function openModalEditarVenta(ventaId, productoId) {
     </div>
   `;
   openModalAnimate();
+  doneProgress();
 }
 
 // ─── MODAL REPONER STOCK ──────────────────────────────────────────────────
 
 async function openModalReponerStock(productoId) {
+  startProgress();
   const p = await getProductoById(productoId);
   if (!p) return;
 
@@ -894,6 +993,7 @@ async function openModalReponerStock(productoId) {
   openModalAnimate();
   window._productoReposicion = p;
   setTimeout(calcularReposicion, 50);
+  doneProgress();
 }
 
 function calcularReposicion() {
@@ -924,6 +1024,7 @@ function calcularReposicion() {
 // ─── MODAL ELIMINAR CON CÓDIGO 2356 ──────────────────────────────────────
 
 function openModalEliminar(id) {
+  startProgress();
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal modal-sm">
       <div class="modal-header">
@@ -948,11 +1049,13 @@ function openModalEliminar(id) {
   `;
   openModalAnimate();
   setTimeout(() => document.getElementById('delete-code-input')?.focus(), 100);
+  doneProgress();
 }
 
 // ─── MODAL DESCARGA REPORTE ──────────────────────────────────────────────
 
 function openModalReporte() {
+  startProgress();
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal modal-sm">
       <div class="modal-header">
@@ -997,6 +1100,7 @@ function openModalReporte() {
     </div>
   `;
   openModalAnimate();
+  doneProgress();
 }
 
 // ─── VISTA FIREBASE ────────────────────────────────────────────────────────
@@ -1026,6 +1130,7 @@ async function renderFirebase() {
 }
 
 function openModalAnimate() {
+
   const overlay = document.getElementById('modal-overlay');
   overlay.style.display = 'flex';
   // Trigger reflow so transition starts from initial state

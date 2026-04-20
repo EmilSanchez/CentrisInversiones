@@ -71,6 +71,21 @@ function mostrarActionSpinner(activo) {
   if (el) el.style.display = activo ? 'flex' : 'none';
 }
 
+function startProgress() {
+  const bar = document.getElementById('progress-bar-top');
+  if (!bar) return;
+  bar.className = 'progress-bar-top';
+  bar.offsetWidth; // force reflow
+  bar.classList.add('running');
+}
+
+function doneProgress() {
+  const bar = document.getElementById('progress-bar-top');
+  if (!bar) return;
+  bar.classList.remove('running');
+  bar.classList.add('done');
+  setTimeout(() => { bar.className = 'progress-bar-top'; }, 500);
+}
 // ─── FILTROS ──────────────────────────────────────────────────────────────
 
 async function aplicarFiltros() {
@@ -128,6 +143,36 @@ async function guardarProducto(id) {
   } catch (err) {
     console.error(err);
     mostrarAlerta('Error al guardar el producto. Intenta de nuevo.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
+  }
+}
+
+async function guardarEdicionMovimiento() {
+  const form = document.getElementById('form-editar-mov');
+  if (!form) return;
+
+  const data = Object.fromEntries(new FormData(form));
+  data.costoProductos = parseFloat(data.costoProductos) || 0;
+  data.costoEnvio     = parseFloat(data.costoEnvio)     || 0;
+  data.otrosCostos    = parseFloat(data.otrosCostos)    || 0;
+  data.cantidad       = parseInt(data.cantidad)         || 0;
+
+  mostrarActionSpinner(true);
+  try {
+    await updateMovimiento(data.movId, {
+      descripcion:     data.descripcion,
+      costoProductos:  data.costoProductos,
+      costoEnvio:      data.costoEnvio,
+      otrosCostos:     data.otrosCostos,
+      cantidad:        data.cantidad,
+    });
+    mostrarAlerta('Movimiento actualizado.', 'success');
+    closeModal();
+    await navigate('movimientos');
+  } catch (err) {
+    console.error(err);
+    mostrarAlerta('Error al actualizar el movimiento.', 'error');
   } finally {
     mostrarActionSpinner(false);
   }
@@ -229,13 +274,52 @@ async function ejecutarEliminar(id) {
 // ─── ELIMINAR VENTA ───────────────────────────────────────────────────────
 
 async function eliminarVenta(ventaId, productoId) {
-  if (!confirm('¿Eliminar este registro de venta?')) return;
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>Confirmar eliminación</h2>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-confirm-msg">
+          Para eliminar esta venta ingresa el código de seguridad:
+        </p>
+        <input type="text" id="delete-code-input" class="delete-confirm-input"
+               placeholder="Código" maxlength="4" autocomplete="off">
+        <p style="text-align:center;margin-top:10px;font-size:.78rem;color:var(--text-light)">
+          Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn-primary" style="background:var(--red)"
+                onclick="ejecutarEliminarVenta('${ventaId}','${productoId}')">Eliminar</button>
+      </div>
+    </div>
+  `;
+  openModalAnimate();
+  setTimeout(() => document.getElementById('delete-code-input')?.focus(), 100);
+}
+
+async function ejecutarEliminarVenta(ventaId, productoId) {
+  const input = document.getElementById('delete-code-input');
+  const code = input?.value?.trim();
+
+  if (code !== '2356') {
+    mostrarAlerta('Código incorrecto. La eliminación fue cancelada.', 'error');
+    if (input) {
+      input.value = '';
+      input.style.borderColor = 'var(--red)';
+      input.focus();
+    }
+    return;
+  }
 
   mostrarActionSpinner(true);
-
   try {
     await deleteVenta(ventaId);
     mostrarAlerta('Venta eliminada.', 'info');
+    closeModal();
     await renderDetalleProducto(productoId);
   } catch (err) {
     mostrarAlerta('Error al eliminar la venta.', 'error');
@@ -588,7 +672,6 @@ async function descargarReporte(tipo) {
 
 async function init() {
   try {
-    await cargarDatosDemo();
     await cargarLogo();
     await navigate('dashboard');
   } catch (err) {

@@ -97,7 +97,6 @@ async function calcularResumenGlobal() {
   // Últimas ventas con producto, nombre, telefono, ganancia
   const ultimasVentas = [...ventas]
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
-    .slice(0, 8)
     .map(v => {
       const prod = productos.find(p => p.id === v.productoId) || null;
       const gananciaVenta = prod ? (v.precioUnitario - prod.costoUnitario) * v.cantidad : 0;
