@@ -785,10 +785,6 @@ async function openModalVenta(productoId) {
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Fecha de venta *</label>
-              <input type="date" name="fecha" value="${new Date().toISOString().split('T')[0]}" required>
-            </div>
-            <div class="form-group">
               <label>Cantidad *</label>
               <input type="number" name="cantidad" min="1" max="${p.stockActual}" required placeholder="Ej: 2">
             </div>
