@@ -96,6 +96,14 @@ async function aplicarFiltros() {
     orden: document.getElementById('f-orden')?.value || '',
   };
   await renderProductos(appState.filtrosProductos);
+
+  // Restaurar foco y cursor al final del input de búsqueda
+  const input = document.getElementById('f-busqueda');
+  if (input && document.activeElement !== input) {
+    input.focus();
+    const len = input.value.length;
+    input.setSelectionRange(len, len);
+  }
 }
 
 // ─── GUARDAR PRODUCTO ─────────────────────────────────────────────────────
