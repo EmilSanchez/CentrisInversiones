@@ -535,15 +535,280 @@ async function marcarFirebaseConectado() {
   await renderFirebase();
 }
 
-// ─── DESCARGA DE REPORTES CSV ─────────────────────────────────────────────
+// ─── DESCARGA DE REPORTES (CSV / EXCEL / PDF) ─────────────────────────────
 
 async function descargarReporte(tipo) {
+  const formato = window._reporteFormato || 'excel';
+  closeModal();
+  mostrarActionSpinner(true);
+
+  try {
+    const productos = await getProductosEnriquecidos();
+    const ventas = await getVentas();
+
+    if (formato === 'pdf') {
+      await descargarReportePDF(tipo, productos, ventas);
+    } else if (formato === 'excel') {
+      await descargarReporteExcel(tipo, productos, ventas);
+    } else {
+      await descargarReporteCSV(tipo, productos, ventas);
+    }
+    mostrarAlerta(`Reporte descargado correctamente.`, 'success');
+  } catch (err) {
+    console.error(err);
+    mostrarAlerta('Error al generar el reporte.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
+  }
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────
+
+function copFmt(n) {
+  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(n || 0);
+}
+
+function mesLabel(mesStr) {
+  if (!mesStr || mesStr === 'sin-fecha') return 'Sin fecha';
+  const [anio, mes] = mesStr.split('-');
+  const nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return `${nombres[parseInt(mes, 10) - 1]} ${anio}`;
+}
+
+function calcularMeses(productos, ventas) {
+  const mesesMap = {};
+  ventas.forEach(v => {
+    const mes = v.fecha?.slice(0, 7) || 'sin-fecha';
+    if (!mesesMap[mes]) mesesMap[mes] = { mes, total: 0, unidades: 0, numVentas: 0, ganancia: 0 };
+    mesesMap[mes].total += (v.cantidad || 0) * (v.precioUnitario || 0);
+    mesesMap[mes].unidades += v.cantidad || 0;
+    mesesMap[mes].numVentas++;
+    const prod = productos.find(p => p.id === v.productoId);
+    if (prod) mesesMap[mes].ganancia += (v.precioUnitario - prod.costoUnitario) * (v.cantidad || 0);
+  });
+  return Object.values(mesesMap).sort((a, b) => b.mes.localeCompare(a.mes));
+}
+
+// ─── EXCEL ────────────────────────────────────────────────────────────────
+
+async function descargarReporteExcel(tipo, productos, ventas) {
+  const wb = XLSX.utils.book_new();
+
+  const estiloHeader = { font: { bold: true } };
+
+  const addSheet = (nombre, filas) => {
+    const ws = XLSX.utils.aoa_to_sheet(filas);
+    XLSX.utils.book_append_sheet(wb, ws, nombre);
+  };
+
+  if (tipo === 'inventario' || tipo === 'general') {
+    const rows = [
+      ['SKU','Nombre','Categoría','Proveedor','Precio USD','Tasa','Cant. comprada','Envío','Otros costos','Inversión total','Costo unitario','Precio sugerido','Vendidas','Stock actual','Recuperado','Ganancia','Recuperación %','Estado'],
+      ...productos.map(p => [
+        p.sku, p.nombre, p.categoria||'', p.proveedor||'',
+        p.precioUSD, p.tasaDolar, p.cantidad, p.envio||0, p.otrosCostos||0,
+        Math.round(p.inversionTotal), Math.round(p.costoUnitario), p.precioSugerido||0,
+        p.unidadesVendidas, p.stockActual,
+        Math.round(p.totalRecuperado), Math.round(p.ganancia),
+        parseFloat(p.recuperacionPct.toFixed(1))+'%', p.estado
+      ])
+    ];
+    addSheet('Inventario', rows);
+  }
+
+  if (tipo === 'ventas' || tipo === 'general') {
+    const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
+    const rows = [
+      ['ID Venta','Fecha','Producto','SKU','Cliente','Teléfono','Cantidad','Precio unitario','Total venta','Observación'],
+      ...await Promise.all(ventasOrdenadas.map(async v => {
+        const p = productos.find(x => x.id === v.productoId);
+        return [v.ventaId||'', v.fecha, p?.nombre||'Eliminado', p?.sku||'-', v.cliente||'', v.telefono||'', v.cantidad, v.precioUnitario, v.cantidad * v.precioUnitario, v.obs||''];
+      }))
+    ];
+    addSheet('Ventas', rows);
+  }
+
+  if (tipo === 'meses' || tipo === 'general') {
+    const meses = calcularMeses(productos, ventas);
+    const rows = [
+      ['Mes','N° ventas','Unidades','Total ingresado','Ganancia'],
+      ...meses.map(m => [mesLabel(m.mes), m.numVentas, m.unidades, Math.round(m.total), Math.round(m.ganancia)])
+    ];
+    addSheet('Por mes', rows);
+  }
+
+  if (tipo === 'stock' || tipo === 'general') {
+    const rows = [
+      ['SKU','Nombre','Categoría','Cant. comprada','Vendidas','Stock actual','Estado stock','Estado'],
+      ...productos.map(p => [p.sku, p.nombre, p.categoria||'', p.cantidad, p.unidadesVendidas, p.stockActual, p.estadoStock, p.estado])
+    ];
+    addSheet('Stock', rows);
+  }
+
+  if (tipo === 'resumen' || tipo === 'general') {
+    const rows = [
+      ['SKU','Nombre','Inversión','Recuperado','Ganancia','Recuperación %','Costo unitario','Precio sugerido','Margen %'],
+      ...productos.map(p => {
+        const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
+        return [p.sku, p.nombre, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), parseFloat(p.recuperacionPct.toFixed(1))+'%', Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'];
+      })
+    ];
+    addSheet('Resumen financiero', rows);
+  }
+
+  if (tipo === 'general') {
+    const totInv = productos.reduce((s,p) => s + p.inversionTotal, 0);
+    const totRec = productos.reduce((s,p) => s + p.totalRecuperado, 0);
+    const totGan = productos.reduce((s,p) => s + p.ganancia, 0);
+    addSheet('Totales', [
+      ['Indicador','Valor'],
+      ['Total Invertido', Math.round(totInv)],
+      ['Total Recuperado', Math.round(totRec)],
+      ['Ganancia Total', Math.round(totGan)],
+      ['Total Productos', productos.length],
+      ['Total Ventas', ventas.length],
+    ]);
+  }
+
+  const fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `centris_${tipo}_${fecha}.xlsx`);
+}
+
+// ─── PDF ──────────────────────────────────────────────────────────────────
+
+async function descargarReportePDF(tipo, productos, ventas) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const fecha = new Date().toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' });
+  const VERDE = [34, 197, 94];
+  const AZUL = [59, 130, 246];
+  const GRIS = [75, 85, 99];
+  const ROJO = [239, 68, 68];
+
+  let yPos = 0;
+
+  function addCover(titulo) {
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 297, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('CENTRIS INVERSIONES', 14, 12);
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(titulo, 14, 20);
+    doc.text(fecha, 297 - 14, 20, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+    yPos = 38;
+  }
+
+  function addSectionTitle(txt) {
+    if (yPos > 175) { doc.addPage(); yPos = 15; }
+    doc.setFillColor(241, 245, 249);
+    doc.rect(10, yPos - 5, 277, 9, 'F');
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...GRIS);
+    doc.text(txt, 14, yPos);
+    doc.setTextColor(0, 0, 0);
+    yPos += 8;
+  }
+
+  function addTable(head, rows, colStyles = {}) {
+    doc.autoTable({
+      startY: yPos,
+      head: [head],
+      body: rows,
+      margin: { left: 10, right: 10 },
+      styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' },
+      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: colStyles,
+      didDrawPage: () => { yPos = doc.lastAutoTable.finalY + 10; },
+    });
+    yPos = doc.lastAutoTable.finalY + 12;
+  }
+
+  addCover('Reporte ' + { general: 'General Completo', inventario: 'de Inventario', ventas: 'de Ventas', meses: 'Mensual', stock: 'de Stock', resumen: 'Financiero' }[tipo]);
+
+  if (tipo === 'inventario' || tipo === 'general') {
+    addSectionTitle('📦 Inventario completo');
+    addTable(
+      ['SKU','Nombre','Categoría','Cant.','Stock','Inversión','Recuperado','Ganancia','Estado'],
+      productos.map(p => [p.sku, p.nombre, p.categoria||'—', p.cantidad, p.stockActual, copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia), p.estado]),
+      { 0: {cellWidth:22}, 1: {cellWidth:55}, 5:{halign:'right'}, 6:{halign:'right'}, 7:{halign:'right'} }
+    );
+  }
+
+  if (tipo === 'ventas' || tipo === 'general') {
+    addSectionTitle('💸 Historial de ventas');
+    const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
+    const rows = ventasOrdenadas.map(v => {
+      const p = productos.find(x => x.id === v.productoId);
+      return [v.ventaId||'—', v.fecha, p?.nombre||'Eliminado', v.cliente||'—', v.cantidad, copFmt(v.precioUnitario), copFmt(v.cantidad * v.precioUnitario)];
+    });
+    addTable(['ID Venta','Fecha','Producto','Cliente','Cant.','Precio unit.','Total'], rows,
+      { 1:{cellWidth:22}, 2:{cellWidth:55}, 5:{halign:'right'}, 6:{halign:'right'} });
+  }
+
+  if (tipo === 'meses' || tipo === 'general') {
+    addSectionTitle('📅 Resumen mensual');
+    const meses = calcularMeses(productos, ventas);
+    addTable(['Mes','N° ventas','Unidades','Total ingresado','Ganancia del mes'],
+      meses.map(m => [mesLabel(m.mes), m.numVentas, m.unidades, copFmt(m.total), copFmt(m.ganancia)]),
+      { 3:{halign:'right'}, 4:{halign:'right'} });
+  }
+
+  if (tipo === 'stock' || tipo === 'general') {
+    addSectionTitle('📊 Estado del stock');
+    addTable(['SKU','Nombre','Categoría','Compradas','Vendidas','Stock actual','Estado stock','Estado'],
+      productos.map(p => [p.sku, p.nombre, p.categoria||'—', p.cantidad, p.unidadesVendidas, p.stockActual, p.estadoStock, p.estado]),
+      { 1:{cellWidth:55} });
+  }
+
+  if (tipo === 'resumen' || tipo === 'general') {
+    addSectionTitle('💰 Resumen financiero');
+    addTable(['SKU','Nombre','Inversión','Recuperado','Ganancia','Recuperación %','Margen %'],
+      productos.map(p => {
+        const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) + '%' : '—';
+        return [p.sku, p.nombre, copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia), p.recuperacionPct.toFixed(1)+'%', margen];
+      }),
+      { 1:{cellWidth:55}, 2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'right'} });
+  }
+
+  if (tipo === 'general') {
+    addSectionTitle('🔢 Totales generales');
+    const totInv = productos.reduce((s,p) => s + p.inversionTotal, 0);
+    const totRec = productos.reduce((s,p) => s + p.totalRecuperado, 0);
+    const totGan = productos.reduce((s,p) => s + p.ganancia, 0);
+    addTable(['Indicador','Valor'], [
+      ['Total invertido', copFmt(totInv)],
+      ['Total recuperado', copFmt(totRec)],
+      ['Ganancia total', copFmt(totGan)],
+      ['Total productos', productos.length],
+      ['Total ventas registradas', ventas.length],
+    ], { 1:{halign:'right', fontStyle:'bold'} });
+  }
+
+  // Footer en todas las páginas
+  const totalPags = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPags; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(150);
+    doc.text(`Centris Inversiones · Generado el ${fecha} · Pág. ${i} de ${totalPags}`, 297/2, 205, { align: 'center' });
+  }
+
+  const fechaISO = new Date().toISOString().slice(0,10);
+  doc.save(`centris_${tipo}_${fechaISO}.pdf`);
+}
+
+// ─── CSV (legado) ─────────────────────────────────────────────────────────
+
+async function descargarReporteCSV(tipo, productos, ventas) {
   let csv = '';
   let filename = '';
   const sep = ';';
-
-  const productos = await getProductosEnriquecidos();
-  const ventas = await getVentas();
 
   if (tipo === 'inventario') {
     filename = 'centris_inventario.csv';
@@ -564,103 +829,48 @@ async function descargarReporte(tipo) {
     csv = headers.join(sep) + '\n';
     const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
     const rows = await Promise.all(ventasOrdenadas.map(async v => {
-      const p = await getProductoById(v.productoId);
-      return [
-        v.fecha, p?.nombre||'Eliminado', p?.sku||'-',
-        v.cantidad, v.precioUnitario,
-        v.cantidad * v.precioUnitario,
-        v.cliente||'', v.telefono||'', v.obs||''
-      ].join(sep);
+      const p = productos.find(x => x.id === v.productoId);
+      return [v.fecha, p?.nombre||'Eliminado', p?.sku||'-', v.cantidad, v.precioUnitario, v.cantidad * v.precioUnitario, v.cliente||'', v.telefono||'', v.obs||''].join(sep);
     }));
     csv += rows.join('\n');
 
+  } else if (tipo === 'meses') {
+    filename = 'centris_mensual.csv';
+    const meses = calcularMeses(productos, ventas);
+    csv = ['Mes','N° ventas','Unidades','Total ingresado','Ganancia'].join(sep) + '\n';
+    csv += meses.map(m => [mesLabel(m.mes), m.numVentas, m.unidades, Math.round(m.total), Math.round(m.ganancia)].join(sep)).join('\n');
+
   } else if (tipo === 'stock') {
     filename = 'centris_stock.csv';
-    const headers = ['SKU','Nombre','Categoria','Cantidad Comprada','Vendidas','Stock Actual','Estado Stock','Estado Producto'];
-    csv = headers.join(sep) + '\n';
-    csv += productos.map(p => [
-      p.sku, p.nombre, p.categoria||'',
-      p.cantidad, p.unidadesVendidas, p.stockActual,
-      p.estadoStock, p.estado
-    ].join(sep)).join('\n');
+    csv = ['SKU','Nombre','Categoria','Cantidad Comprada','Vendidas','Stock Actual','Estado Stock','Estado Producto'].join(sep) + '\n';
+    csv += productos.map(p => [p.sku, p.nombre, p.categoria||'', p.cantidad, p.unidadesVendidas, p.stockActual, p.estadoStock, p.estado].join(sep)).join('\n');
 
   } else if (tipo === 'resumen') {
     filename = 'centris_resumen_financiero.csv';
-    const headers = ['SKU','Nombre','Inversion Total','Total Recuperado','Ganancia','Recuperacion %','Costo Unitario','Precio Sugerido','Margen Estimado %'];
-    csv = headers.join(sep) + '\n';
+    csv = ['SKU','Nombre','Inversion Total','Total Recuperado','Ganancia','Recuperacion %','Costo Unitario','Precio Sugerido','Margen Estimado %'].join(sep) + '\n';
     csv += productos.map(p => {
       const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
-      return [
-        p.sku, p.nombre,
-        Math.round(p.inversionTotal), Math.round(p.totalRecuperado),
-        Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%',
-        Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'
-      ].join(sep);
+      return [p.sku, p.nombre, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%', Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'].join(sep);
     }).join('\n');
 
   } else if (tipo === 'general') {
     filename = 'centris_reporte_general.csv';
-    const fecha = new Date().toLocaleDateString('es-CO');
-
-    // Sección 1: Inventario
-    csv += `REPORTE GENERAL CENTRIS - ${fecha}\n\n`;
-    csv += `=== INVENTARIO COMPLETO ===\n`;
-    csv += ['SKU','Nombre','Categoria','Proveedor','Precio USD','Tasa','Cantidad','Envio','Otros Costos','Inversion Total','Costo Unit.','Precio Sugerido','Vendidas','Stock','Recuperado','Ganancia','Recuperacion %','Estado'].join(sep) + '\n';
-    csv += productos.map(p => [
-      p.sku, p.nombre, p.categoria||'', p.proveedor||'',
-      p.precioUSD, p.tasaDolar, p.cantidad, p.envio||0, p.otrosCostos||0,
-      Math.round(p.inversionTotal), Math.round(p.costoUnitario), p.precioSugerido||0,
-      p.unidadesVendidas, p.stockActual,
-      Math.round(p.totalRecuperado), Math.round(p.ganancia),
-      p.recuperacionPct.toFixed(1)+'%', p.estado
-    ].join(sep)).join('\n');
-
-    // Sección 2: Ventas
-    csv += '\n\n=== HISTORIAL DE VENTAS ===\n';
-    csv += ['ID Venta','Fecha','Producto','SKU','Cliente','Telefono','Cantidad','Precio Unit.','Total Venta','Observacion'].join(sep) + '\n';
-    const ventasOrdenadas2 = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
-    const rows2 = await Promise.all(ventasOrdenadas2.map(async v => {
-      const p = await getProductoById(v.productoId);
-      return [
-        v.ventaId||'', v.fecha, p?.nombre||'Eliminado', p?.sku||'-',
-        v.cliente||'', v.telefono||'', v.cantidad, v.precioUnitario,
-        v.cantidad * v.precioUnitario, v.obs||''
-      ].join(sep);
-    }));
-    csv += rows2.join('\n');
-
-    // Sección 3: Stock
-    csv += '\n\n=== ESTADO DEL STOCK ===\n';
-    csv += ['SKU','Nombre','Categoria','Compradas','Vendidas','Stock Actual','Estado Stock','Estado'].join(sep) + '\n';
-    csv += productos.map(p => [
-      p.sku, p.nombre, p.categoria||'',
-      p.cantidad, p.unidadesVendidas, p.stockActual,
-      p.estadoStock, p.estado
-    ].join(sep)).join('\n');
-
-    // Sección 4: Resumen financiero
-    csv += '\n\n=== RESUMEN FINANCIERO ===\n';
-    csv += ['SKU','Nombre','Inversion','Recuperado','Ganancia','Recuperacion %','Costo Unit.','Precio Sugerido','Margen %'].join(sep) + '\n';
-    csv += productos.map(p => {
-      const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
-      return [
-        p.sku, p.nombre,
-        Math.round(p.inversionTotal), Math.round(p.totalRecuperado),
-        Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%',
-        Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'
-      ].join(sep);
-    }).join('\n');
-
-    // Totales
-    const totInv = productos.reduce((s,p) => s + p.inversionTotal, 0);
-    const totRec = productos.reduce((s,p) => s + p.totalRecuperado, 0);
-    const totGan = productos.reduce((s,p) => s + p.ganancia, 0);
-    csv += '\n\n=== TOTALES ===\n';
-    csv += `Total Invertido${sep}${Math.round(totInv)}\n`;
-    csv += `Total Recuperado${sep}${Math.round(totRec)}\n`;
-    csv += `Ganancia Total${sep}${Math.round(totGan)}\n`;
-    csv += `Total Productos${sep}${productos.length}\n`;
-    csv += `Total Ventas${sep}${ventas.length}\n`;
+    const fechaStr = new Date().toLocaleDateString('es-CO');
+    csv += `REPORTE GENERAL CENTRIS - ${fechaStr}\n\n`;
+    csv += `=== INVENTARIO ===\n`;
+    csv += ['SKU','Nombre','Inversion Total','Recuperado','Ganancia','Stock','Estado'].join(sep) + '\n';
+    csv += productos.map(p => [p.sku, p.nombre, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), p.stockActual, p.estado].join(sep)).join('\n');
+    csv += '\n\n=== VENTAS ===\n';
+    csv += ['Fecha','Producto','Cliente','Cantidad','Total'].join(sep) + '\n';
+    const ventasOrd = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
+    ventasOrd.forEach(v => {
+      const p = productos.find(x => x.id === v.productoId);
+      csv += [v.fecha, p?.nombre||'Eliminado', v.cliente||'', v.cantidad, v.cantidad*v.precioUnitario].join(sep) + '\n';
+    });
+    const meses = calcularMeses(productos, ventas);
+    csv += '\n\n=== MENSUAL ===\n';
+    csv += ['Mes','Ventas','Unidades','Total','Ganancia'].join(sep) + '\n';
+    csv += meses.map(m => [mesLabel(m.mes), m.numVentas, m.unidades, Math.round(m.total), Math.round(m.ganancia)].join(sep)).join('\n');
   }
 
   const bom = '\uFEFF';
@@ -671,9 +881,6 @@ async function descargarReporte(tipo) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-
-  closeModal();
-  mostrarAlerta(`Reporte "${filename}" descargado correctamente.`, 'success');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────

@@ -116,6 +116,22 @@ async function calcularResumenGlobal() {
     unidadesTotalesVendidas,
     productosStockBajo,
     ultimasVentas,
+    meses: (() => {
+      const mesesMap = {};
+      ventas.forEach(v => {
+        const mes = v.fecha?.slice(0, 7) || 'sin-fecha';
+        if (!mesesMap[mes]) mesesMap[mes] = { mes, total: 0, unidades: 0, numVentas: 0, ganancia: 0, ventas: [] };
+        mesesMap[mes].total += (v.cantidad || 0) * (v.precioUnitario || 0);
+        mesesMap[mes].unidades += v.cantidad || 0;
+        mesesMap[mes].numVentas++;
+        mesesMap[mes].ventas.push(v);
+        const prod = productos.find(p => p.id === v.productoId);
+        if (prod) {
+          mesesMap[mes].ganancia += (v.precioUnitario - prod.costoUnitario) * (v.cantidad || 0);
+        }
+      });
+      return Object.values(mesesMap).sort((a, b) => b.mes.localeCompare(a.mes));
+    })(),
   };
 }
 
@@ -138,10 +154,15 @@ async function getReportes() {
   const meses = {};
   ventas.forEach(v => {
     const mes = v.fecha?.slice(0, 7) || 'sin-fecha';
-    if (!meses[mes]) meses[mes] = { mes, total: 0, unidades: 0, numVentas: 0 };
+    if (!meses[mes]) meses[mes] = { mes, total: 0, unidades: 0, numVentas: 0, ganancia: 0 };
     meses[mes].total += (v.cantidad || 0) * (v.precioUnitario || 0);
     meses[mes].unidades += v.cantidad || 0;
     meses[mes].numVentas++;
+    // Calcular ganancia por venta
+    const prod = productos.find(p => p.id === v.productoId);
+    if (prod) {
+      meses[mes].ganancia += (v.precioUnitario - prod.costoUnitario) * (v.cantidad || 0);
+    }
   });
 
   return {

@@ -1126,3 +1126,195 @@ code.sku {
   opacity: 0;
   transition: width .15s ease, opacity .3s ease .1s;
 }
+/* ── DASHBOARD MES SELECTOR ───────────────────────── */
+.dash-mes-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-mes {
+  padding: 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: .85rem;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.select-mes:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.mes-kpi-strip {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, rgba(59,130,246,.05), rgba(16,185,129,.05));
+}
+.mes-kpi-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px;
+  border-right: 1px solid var(--border);
+  gap: 4px;
+}
+.mes-kpi-item:last-child { border-right: none; }
+.mes-kpi-label {
+  font-size: .72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 600;
+}
+.mes-kpi-valor {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ── REPORTES MODAL MEJORADO ──────────────────────── */
+.modal-reporte {
+  max-width: 660px;
+  width: 95vw;
+}
+
+.reporte-formato-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--bg);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.reporte-formato-label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.reporte-formato-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reporte-fmt-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: .83rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .18s;
+}
+.reporte-fmt-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.reporte-fmt-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.reporte-secciones-titulo {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 10px;
+}
+
+.reporte-opciones-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reporte-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+@media (max-width: 500px) {
+  .reporte-grid-2 { grid-template-columns: 1fr; }
+}
+
+.reporte-opt {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all .18s;
+  background: var(--surface);
+  position: relative;
+}
+.reporte-opt:hover {
+  border-color: var(--accent);
+  box-shadow: 0 2px 12px rgba(59,130,246,.12);
+  transform: translateY(-1px);
+}
+.reporte-opt-destacado {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, rgba(59,130,246,.06), rgba(16,185,129,.04));
+}
+
+.reporte-opt-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(59,130,246,.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.reporte-opt-icon svg { width: 20px; height: 20px; stroke: var(--accent); fill: none; stroke-width: 1.8; }
+.reporte-opt-icon-sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+}
+.reporte-opt-icon-sm svg { width: 16px; height: 16px; }
+
+.reporte-opt-body { flex: 1; }
+
+.reporte-opt-badge {
+  position: absolute;
+  top: -1px;
+  right: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 0 0 6px 6px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.opt-title {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.opt-desc {
+  font-size: .78rem;
+  color: var(--text-muted);
+}

@@ -66,6 +66,11 @@ function btnIcon(iconKey, title, onclick, extraClass = '') {
 async function renderDashboard() {
   const r = await calcularResumenGlobal();
 
+  // Mes seleccionado (por defecto el más reciente)
+  const mesActual = r.meses.length > 0 ? r.meses[0].mes : null;
+  window._dashData = r;
+  window._dashMesSeleccionado = mesActual;
+
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
       <h1>Dashboard</h1>
@@ -83,31 +88,29 @@ async function renderDashboard() {
 
     <div class="dash-grid" style="grid-template-columns: 1fr;">
       <div class="card">
-        <div class="card-header">
-          <h3>Historial completo de ventas</h3>
-          <button class="btn-link" onclick="navigate('productos')">Ver productos</button>
+        <div class="card-header" style="align-items:center;flex-wrap:wrap;gap:12px;">
+          <h3 style="margin:0">Historial de ventas</h3>
+          <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+            ${r.meses.length > 0 ? `
+            <div class="dash-mes-selector">
+              <label style="font-size:.8rem;color:var(--text-muted);font-weight:500;">Filtrar por mes:</label>
+              <select id="dash-mes-select" onchange="filtrarVentasMes(this.value)" class="select-mes">
+                <option value="">— Todos —</option>
+                ${r.meses.map(m => `<option value="${m.mes}" ${m.mes === mesActual ? 'selected' : ''}>${formatearMesLabel(m.mes)}</option>`).join('')}
+              </select>
+            </div>` : ''}
+            <button class="btn-link" onclick="navigate('productos')">Ver productos →</button>
+          </div>
         </div>
+
+        <!-- KPIs del mes -->
+        <div id="dash-mes-kpis"></div>
+
         <div class="table-wrap" style="max-height: 560px; overflow-y: auto;">
-          <table>
+          <table id="dash-ventas-table">
             <thead><tr><th>ID Venta</th><th>Producto</th><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Cant.</th><th>Precio venta</th><th>Ganancia</th></tr></thead>
-            <tbody>
-              ${r.ultimasVentas.length === 0 ? '<tr><td colspan="8" class="empty">Sin ventas aún</td></tr>' :
-                r.ultimasVentas.map(v => `
-                  <tr onclick="navigate('detalle-producto','${v.productoId}')" class="clickable">
-                    <td><code class="sku">${v.ventaId || '—'}</code></td>
-                    <td>
-                      <div class="cell-producto">
-                        ${imagenProducto(v.producto?.imagen, v.producto?.nombre)}
-                        <span>${v.producto?.nombre || '—'}</span>
-                      </div>
-                    </td>
-                    <td>${fmt.fecha(v.fecha)}</td>
-                    <td>${v.cliente || '—'}</td>
-                    <td>${v.telefono || '—'}</td>
-                    <td>${v.cantidad}</td>
-                    <td>${fmt.cop(v.precioUnitario)}</td>
-                    <td class="${v.gananciaVenta >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(v.gananciaVenta)}</td>
-                  </tr>`).join('')}
+            <tbody id="dash-ventas-body">
+              ${renderVentasBody(r.ultimasVentas.filter(v => !mesActual || (v.fecha && v.fecha.startsWith(mesActual))))}
             </tbody>
           </table>
         </div>
@@ -124,7 +127,77 @@ async function renderDashboard() {
         </button>` : ''}
     </div>
   `;
-  window._productosStockBajo = r.productosStockBajo; 
+
+  // Renderizar KPIs del mes seleccionado
+  if (mesActual) actualizarKpisMes(mesActual);
+
+  window._productosStockBajo = r.productosStockBajo;
+}
+
+function formatearMesLabel(mesStr) {
+  if (!mesStr || mesStr === 'sin-fecha') return 'Sin fecha';
+  const [anio, mes] = mesStr.split('-');
+  const nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return `${nombres[parseInt(mes, 10) - 1]} ${anio}`;
+}
+
+function renderVentasBody(ventas) {
+  if (!ventas || ventas.length === 0) return '<tr><td colspan="8" class="empty">Sin ventas en este período</td></tr>';
+  return ventas.map(v => `
+    <tr onclick="navigate('detalle-producto','${v.productoId}')" class="clickable">
+      <td><code class="sku">${v.ventaId || '—'}</code></td>
+      <td>
+        <div class="cell-producto">
+          ${imagenProducto(v.producto?.imagen, v.producto?.nombre)}
+          <span>${v.producto?.nombre || '—'}</span>
+        </div>
+      </td>
+      <td>${fmt.fecha(v.fecha)}</td>
+      <td>${v.cliente || '—'}</td>
+      <td>${v.telefono || '—'}</td>
+      <td>${v.cantidad}</td>
+      <td>${fmt.cop(v.precioUnitario)}</td>
+      <td class="${v.gananciaVenta >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(v.gananciaVenta)}</td>
+    </tr>`).join('');
+}
+
+function actualizarKpisMes(mes) {
+  const r = window._dashData;
+  if (!r) return;
+  const datosMes = r.meses.find(m => m.mes === mes);
+  const container = document.getElementById('dash-mes-kpis');
+  if (!container) return;
+  if (!datosMes) { container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <div class="mes-kpi-strip">
+      <div class="mes-kpi-item">
+        <span class="mes-kpi-label">Ventas del mes</span>
+        <span class="mes-kpi-valor">${datosMes.numVentas}</span>
+      </div>
+      <div class="mes-kpi-item">
+        <span class="mes-kpi-label">Unidades vendidas</span>
+        <span class="mes-kpi-valor">${fmt.num(datosMes.unidades)}</span>
+      </div>
+      <div class="mes-kpi-item">
+        <span class="mes-kpi-label">Total ingresado</span>
+        <span class="mes-kpi-valor text-success">${fmt.cop(datosMes.total)}</span>
+      </div>
+      <div class="mes-kpi-item">
+        <span class="mes-kpi-label">Ganancia del mes</span>
+        <span class="mes-kpi-valor ${datosMes.ganancia >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(datosMes.ganancia)}</span>
+      </div>
+    </div>`;
+}
+
+function filtrarVentasMes(mes) {
+  window._dashMesSeleccionado = mes;
+  const r = window._dashData;
+  if (!r) return;
+  const ventasFiltradas = mes
+    ? r.ultimasVentas.filter(v => v.fecha && v.fecha.startsWith(mes))
+    : r.ultimasVentas;
+  document.getElementById('dash-ventas-body').innerHTML = renderVentasBody(ventasFiltradas);
+  actualizarKpisMes(mes);
 }
 
 // SVG icons por tipo de KPI
@@ -539,16 +612,17 @@ async function renderReportes() {
       <h3 class="reporte-titulo">Resumen mensual de ventas</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Mes</th><th>N° ventas</th><th>Unidades</th><th>Total ingresado</th></tr></thead>
+          <thead><tr><th>Mes</th><th>N° ventas</th><th>Unidades</th><th>Total ingresado</th><th>Ganancia del mes</th></tr></thead>
           <tbody>
             ${r.meses.length === 0
-              ? '<tr><td colspan="4" class="empty">Sin ventas registradas</td></tr>'
+              ? '<tr><td colspan="5" class="empty">Sin ventas registradas</td></tr>'
               : r.meses.map(m => `
                 <tr>
-                  <td class="fw600">${m.mes}</td>
+                  <td class="fw600">${formatearMesLabel(m.mes)}</td>
                   <td>${m.numVentas}</td>
                   <td>${m.unidades}</td>
                   <td>${fmt.cop(m.total)}</td>
+                  <td class="${m.ganancia >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(m.ganancia)}</td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -1053,40 +1127,92 @@ function openModalEliminar(id) {
 function openModalReporte() {
   startProgress();
   document.getElementById('modal-overlay').innerHTML = `
-    <div class="modal modal-sm">
+    <div class="modal modal-reporte">
       <div class="modal-header">
-        <h2>Descargar reporte</h2>
+        <h2>Generar reporte</h2>
         <button class="modal-close" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
-        <p style="color:var(--text-muted);font-size:.875rem;margin-bottom:16px">
-          Elige el reporte que deseas descargar en formato CSV (compatible con Excel).
-        </p>
-        <div class="reporte-opciones">
-          <div class="reporte-opt reporte-opt-destacado" onclick="descargarReporte('general')">
-            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <div class="opt-title">Reporte general completo</div>
-            <div class="opt-desc">Todo en un solo archivo: inventario, ventas, stock y resumen financiero</div>
+
+        <!-- Selector de formato -->
+        <div class="reporte-formato-selector">
+          <span class="reporte-formato-label">Formato de descarga:</span>
+          <div class="reporte-formato-btns">
+            <button class="reporte-fmt-btn active" id="fmt-excel" onclick="seleccionarFormato('excel')">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+              Excel (.xlsx)
+            </button>
+            <button class="reporte-fmt-btn" id="fmt-pdf" onclick="seleccionarFormato('pdf')">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
+              PDF
+            </button>
+            <button class="reporte-fmt-btn" id="fmt-csv" onclick="seleccionarFormato('csv')">
+              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              CSV
+            </button>
           </div>
-          <div class="reporte-opt" onclick="descargarReporte('inventario')">
-            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-            <div class="opt-title">Inventario completo</div>
-            <div class="opt-desc">Todos los productos con inversión, stock y ganancias</div>
+        </div>
+
+        <div class="reporte-secciones-titulo">Selecciona qué incluir:</div>
+        <div class="reporte-opciones reporte-opciones-grid">
+
+          <div class="reporte-opt reporte-opt-destacado" onclick="descargarReporte('general')" data-tipo="general">
+            <div class="reporte-opt-icon">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <div class="reporte-opt-body">
+              <div class="opt-title">Reporte general completo</div>
+              <div class="opt-desc">Inventario · Ventas · Stock · Resumen financiero · Resumen mensual</div>
+            </div>
+            <span class="reporte-opt-badge">Recomendado</span>
           </div>
-          <div class="reporte-opt" onclick="descargarReporte('ventas')">
-            <svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            <div class="opt-title">Historial de ventas</div>
-            <div class="opt-desc">Todas las ventas registradas con fechas y precios</div>
-          </div>
-          <div class="reporte-opt" onclick="descargarReporte('stock')">
-            <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            <div class="opt-title">Estado del stock</div>
-            <div class="opt-desc">Stock actual, agotados y productos en alerta</div>
-          </div>
-          <div class="reporte-opt" onclick="descargarReporte('resumen')">
-            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            <div class="opt-title">Resumen financiero</div>
-            <div class="opt-desc">Inversión vs recuperación vs ganancia por producto</div>
+
+          <div class="reporte-grid-2">
+            <div class="reporte-opt" onclick="descargarReporte('inventario')" data-tipo="inventario">
+              <div class="reporte-opt-icon reporte-opt-icon-sm">
+                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </div>
+              <div>
+                <div class="opt-title">Inventario</div>
+                <div class="opt-desc">Productos, costos y ganancias</div>
+              </div>
+            </div>
+            <div class="reporte-opt" onclick="descargarReporte('ventas')" data-tipo="ventas">
+              <div class="reporte-opt-icon reporte-opt-icon-sm">
+                <svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+              </div>
+              <div>
+                <div class="opt-title">Historial de ventas</div>
+                <div class="opt-desc">Todas las ventas con fechas y precios</div>
+              </div>
+            </div>
+            <div class="reporte-opt" onclick="descargarReporte('meses')" data-tipo="meses">
+              <div class="reporte-opt-icon reporte-opt-icon-sm">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div>
+                <div class="opt-title">Resumen mensual</div>
+                <div class="opt-desc">Ventas y ganancias por mes</div>
+              </div>
+            </div>
+            <div class="reporte-opt" onclick="descargarReporte('stock')" data-tipo="stock">
+              <div class="reporte-opt-icon reporte-opt-icon-sm">
+                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <div>
+                <div class="opt-title">Estado del stock</div>
+                <div class="opt-desc">Stock actual y alertas</div>
+              </div>
+            </div>
+            <div class="reporte-opt" onclick="descargarReporte('resumen')" data-tipo="resumen">
+              <div class="reporte-opt-icon reporte-opt-icon-sm">
+                <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              </div>
+              <div>
+                <div class="opt-title">Resumen financiero</div>
+                <div class="opt-desc">Inversión vs ganancia</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1095,8 +1221,15 @@ function openModalReporte() {
       </div>
     </div>
   `;
+  window._reporteFormato = 'excel';
   openModalAnimate();
   doneProgress();
+}
+
+function seleccionarFormato(fmt) {
+  window._reporteFormato = fmt;
+  document.querySelectorAll('.reporte-fmt-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('fmt-' + fmt)?.classList.add('active');
 }
 
 // ─── VISTA FIREBASE ────────────────────────────────────────────────────────
