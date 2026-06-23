@@ -1318,3 +1318,143 @@ code.sku {
   font-size: .78rem;
   color: var(--text-muted);
 }
+
+/* ── MODAL REPORTE V2 — CHECKBOXES ────────────────── */
+.reporte-seccion-bloque {
+  border: 1.5px solid var(--accent);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(59,130,246,.04), rgba(16,185,129,.03));
+}
+.reporte-seccion-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+.reporte-opt-badge-inline {
+  background: var(--accent);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.rep-checks-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+@media (max-width: 480px) {
+  .rep-checks-grid { grid-template-columns: 1fr; }
+}
+.rep-check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background: var(--surface);
+  user-select: none;
+}
+.rep-check-label:hover {
+  border-color: var(--accent);
+  background: rgba(59,130,246,.04);
+}
+.rep-check-label input[type="checkbox"] {
+  display: none;
+}
+.rep-check-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 5px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+}
+.rep-check-label input:checked ~ .rep-check-box {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.rep-check-label input:checked ~ .rep-check-box::after {
+  content: '';
+  display: block;
+  width: 5px;
+  height: 9px;
+  border: 2px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.rep-check-label input:checked ~ * ~ div .rep-check-title {
+  color: var(--accent);
+}
+.rep-check-title {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+.rep-check-desc {
+  font-size: .75rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.rep-descargar-btn {
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  display: flex;
+  align-items: center;
+}
+.rep-descargar-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.reporte-individuales-titulo {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 8px;
+}
+.reporte-opt-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: .84rem;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface);
+  transition: all .15s;
+}
+.reporte-opt-mini:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(59,130,246,.05);
+}
+.reporte-opt-mini svg {
+  flex-shrink: 0;
+  stroke: currentColor;
+}

@@ -539,6 +539,16 @@ async function marcarFirebaseConectado() {
 
 async function descargarReporte(tipo) {
   const formato = window._reporteFormato || 'excel';
+  // Leer secciones seleccionadas desde checkboxes (solo para general)
+  let secciones = null;
+  if (tipo === 'general') {
+    const checks = document.querySelectorAll('.rep-check:checked');
+    secciones = [...checks].map(c => c.value);
+    if (secciones.length === 0) {
+      mostrarAlerta('Selecciona al menos una sección para el reporte.', 'error');
+      return;
+    }
+  }
   closeModal();
   mostrarActionSpinner(true);
 
@@ -547,16 +557,16 @@ async function descargarReporte(tipo) {
     const ventas = await getVentas();
 
     if (formato === 'pdf') {
-      await descargarReportePDF(tipo, productos, ventas);
+      await descargarReportePDF(tipo, productos, ventas, secciones);
     } else if (formato === 'excel') {
-      await descargarReporteExcel(tipo, productos, ventas);
+      await descargarReporteExcel(tipo, productos, ventas, secciones);
     } else {
-      await descargarReporteCSV(tipo, productos, ventas);
+      await descargarReporteCSV(tipo, productos, ventas, secciones);
     }
     mostrarAlerta(`Reporte descargado correctamente.`, 'success');
   } catch (err) {
     console.error(err);
-    mostrarAlerta('Error al generar el reporte.', 'error');
+    mostrarAlerta('Error al generar el reporte. Verifica la consola.', 'error');
   } finally {
     mostrarActionSpinner(false);
   }
@@ -591,17 +601,16 @@ function calcularMeses(productos, ventas) {
 
 // ─── EXCEL ────────────────────────────────────────────────────────────────
 
-async function descargarReporteExcel(tipo, productos, ventas) {
+async function descargarReporteExcel(tipo, productos, ventas, secciones) {
   const wb = XLSX.utils.book_new();
-
-  const estiloHeader = { font: { bold: true } };
+  const mostrar = (sec) => !secciones || secciones.includes(sec);
 
   const addSheet = (nombre, filas) => {
     const ws = XLSX.utils.aoa_to_sheet(filas);
     XLSX.utils.book_append_sheet(wb, ws, nombre);
   };
 
-  if (tipo === 'inventario' || tipo === 'general') {
+  if ((tipo === 'inventario' || tipo === 'general') && mostrar('inventario')) {
     const rows = [
       ['SKU','Nombre','Categoría','Proveedor','Precio USD','Tasa','Cant. comprada','Envío','Otros costos','Inversión total','Costo unitario','Precio sugerido','Vendidas','Stock actual','Recuperado','Ganancia','Recuperación %','Estado'],
       ...productos.map(p => [
@@ -616,7 +625,7 @@ async function descargarReporteExcel(tipo, productos, ventas) {
     addSheet('Inventario', rows);
   }
 
-  if (tipo === 'ventas' || tipo === 'general') {
+  if ((tipo === 'ventas' || tipo === 'general') && mostrar('ventas')) {
     const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
     const rows = [
       ['ID Venta','Fecha','Producto','SKU','Cliente','Teléfono','Cantidad','Precio unitario','Total venta','Observación'],
@@ -628,7 +637,7 @@ async function descargarReporteExcel(tipo, productos, ventas) {
     addSheet('Ventas', rows);
   }
 
-  if (tipo === 'meses' || tipo === 'general') {
+  if ((tipo === 'meses' || tipo === 'general') && mostrar('meses')) {
     const meses = calcularMeses(productos, ventas);
     const rows = [
       ['Mes','N° ventas','Unidades','Total ingresado','Ganancia'],
@@ -637,7 +646,7 @@ async function descargarReporteExcel(tipo, productos, ventas) {
     addSheet('Por mes', rows);
   }
 
-  if (tipo === 'stock' || tipo === 'general') {
+  if ((tipo === 'stock' || tipo === 'general') && mostrar('stock')) {
     const rows = [
       ['SKU','Nombre','Categoría','Cant. comprada','Vendidas','Stock actual','Estado stock','Estado'],
       ...productos.map(p => [p.sku, p.nombre, p.categoria||'', p.cantidad, p.unidadesVendidas, p.stockActual, p.estadoStock, p.estado])
@@ -645,7 +654,7 @@ async function descargarReporteExcel(tipo, productos, ventas) {
     addSheet('Stock', rows);
   }
 
-  if (tipo === 'resumen' || tipo === 'general') {
+  if ((tipo === 'resumen' || tipo === 'general') && mostrar('resumen')) {
     const rows = [
       ['SKU','Nombre','Inversión','Recuperado','Ganancia','Recuperación %','Costo unitario','Precio sugerido','Margen %'],
       ...productos.map(p => {
@@ -656,7 +665,7 @@ async function descargarReporteExcel(tipo, productos, ventas) {
     addSheet('Resumen financiero', rows);
   }
 
-  if (tipo === 'general') {
+  if (tipo === 'general' && mostrar('totales')) {
     const totInv = productos.reduce((s,p) => s + p.inversionTotal, 0);
     const totRec = productos.reduce((s,p) => s + p.totalRecuperado, 0);
     const totGan = productos.reduce((s,p) => s + p.ganancia, 0);
@@ -676,28 +685,27 @@ async function descargarReporteExcel(tipo, productos, ventas) {
 
 // ─── PDF ──────────────────────────────────────────────────────────────────
 
-async function descargarReportePDF(tipo, productos, ventas) {
+async function descargarReportePDF(tipo, productos, ventas, secciones) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const PW = 297; // page width landscape A4
+  const ML = 10, MR = 10; // margins
+  const TW = PW - ML - MR; // table width
   const fecha = new Date().toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' });
-  const VERDE = [34, 197, 94];
-  const AZUL = [59, 130, 246];
   const GRIS = [75, 85, 99];
-  const ROJO = [239, 68, 68];
-
   let yPos = 0;
 
   function addCover(titulo) {
     doc.setFillColor(15, 23, 42);
-    doc.rect(0, 0, 297, 30, 'F');
+    doc.rect(0, 0, PW, 30, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18);
     doc.setFont(undefined, 'bold');
-    doc.text('CENTRIS INVERSIONES', 14, 12);
+    doc.text('CENTRIS INVERSIONES', ML + 4, 12);
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    doc.text(titulo, 14, 20);
-    doc.text(fecha, 297 - 14, 20, { align: 'right' });
+    doc.text(titulo, ML + 4, 21);
+    doc.text(fecha, PW - MR - 4, 21, { align: 'right' });
     doc.setTextColor(0, 0, 0);
     yPos = 38;
   }
@@ -705,11 +713,11 @@ async function descargarReportePDF(tipo, productos, ventas) {
   function addSectionTitle(txt) {
     if (yPos > 175) { doc.addPage(); yPos = 15; }
     doc.setFillColor(241, 245, 249);
-    doc.rect(10, yPos - 5, 277, 9, 'F');
+    doc.rect(ML, yPos - 5, TW, 9, 'F');
     doc.setFont(undefined, 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(...GRIS);
-    doc.text(txt, 14, yPos);
+    doc.text(txt, ML + 4, yPos);
     doc.setTextColor(0, 0, 0);
     yPos += 8;
   }
@@ -719,9 +727,22 @@ async function descargarReportePDF(tipo, productos, ventas) {
       startY: yPos,
       head: [head],
       body: rows,
-      margin: { left: 10, right: 10 },
-      styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' },
-      headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+      tableWidth: TW,
+      margin: { left: ML, right: MR },
+      styles: {
+        fontSize: 7.5,
+        cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
+        overflow: 'linebreak',
+        valign: 'middle',
+      },
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 8,
+        halign: 'center',
+        valign: 'middle',
+      },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: colStyles,
       didDrawPage: () => { yPos = doc.lastAutoTable.finalY + 10; },
@@ -729,74 +750,141 @@ async function descargarReportePDF(tipo, productos, ventas) {
     yPos = doc.lastAutoTable.finalY + 12;
   }
 
-  addCover('Reporte ' + { general: 'General Completo', inventario: 'de Inventario', ventas: 'de Ventas', meses: 'Mensual', stock: 'de Stock', resumen: 'Financiero' }[tipo]);
+  const tituloMap = { general: 'General Completo', inventario: 'Inventario', ventas: 'Ventas', meses: 'Mensual', stock: 'Stock', resumen: 'Resumen Financiero', totales: 'Totales' };
+  const titulo = tipo === 'general' ? 'General Completo' : (tituloMap[tipo] || tipo);
+  addCover('Reporte ' + titulo);
 
-  if (tipo === 'inventario' || tipo === 'general') {
-    addSectionTitle('📦 Inventario completo');
+  const mostrar = (sec) => !secciones || secciones.includes(sec);
+
+  if ((tipo === 'inventario' || tipo === 'general') && mostrar('inventario')) {
+    addSectionTitle('Inventario completo');
+    // SKU=22 Nombre=auto Categoria=28 Cant=13 Stock=13 Inversion=30 Recuperado=30 Ganancia=30 Estado=18
     addTable(
-      ['SKU','Nombre','Categoría','Cant.','Stock','Inversión','Recuperado','Ganancia','Estado'],
-      productos.map(p => [p.sku, p.nombre, p.categoria||'—', p.cantidad, p.stockActual, copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia), p.estado]),
-      { 0: {cellWidth:22}, 1: {cellWidth:55}, 5:{halign:'right'}, 6:{halign:'right'}, 7:{halign:'right'} }
+      ['SKU', 'Nombre', 'Categoria', 'Cant.', 'Stock', 'Inversion', 'Recuperado', 'Ganancia', 'Estado'],
+      productos.map(p => [
+        p.sku, p.nombre, p.categoria||'—',
+        p.cantidad, p.stockActual,
+        copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia),
+        p.estado
+      ]),
+      {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 13, halign: 'center' },
+        4: { cellWidth: 13, halign: 'center' },
+        5: { cellWidth: 32, halign: 'right' },
+        6: { cellWidth: 32, halign: 'right' },
+        7: { cellWidth: 32, halign: 'right' },
+        8: { cellWidth: 20, halign: 'center' },
+      }
     );
   }
 
-  if (tipo === 'ventas' || tipo === 'general') {
-    addSectionTitle('💸 Historial de ventas');
+  if ((tipo === 'ventas' || tipo === 'general') && mostrar('ventas')) {
+    addSectionTitle('Historial de ventas');
     const ventasOrdenadas = [...ventas].sort((a,b) => new Date(b.fecha)-new Date(a.fecha));
     const rows = ventasOrdenadas.map(v => {
       const p = productos.find(x => x.id === v.productoId);
       return [v.ventaId||'—', v.fecha, p?.nombre||'Eliminado', v.cliente||'—', v.cantidad, copFmt(v.precioUnitario), copFmt(v.cantidad * v.precioUnitario)];
     });
-    addTable(['ID Venta','Fecha','Producto','Cliente','Cant.','Precio unit.','Total'], rows,
-      { 1:{cellWidth:22}, 2:{cellWidth:55}, 5:{halign:'right'}, 6:{halign:'right'} });
+    addTable(
+      ['ID Venta', 'Fecha', 'Producto', 'Cliente', 'Cant.', 'Precio unit.', 'Total'],
+      rows,
+      {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 25, halign: 'center' },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 40 },
+        4: { cellWidth: 13, halign: 'center' },
+        5: { cellWidth: 32, halign: 'right' },
+        6: { cellWidth: 32, halign: 'right' },
+      }
+    );
   }
 
-  if (tipo === 'meses' || tipo === 'general') {
-    addSectionTitle('📅 Resumen mensual');
+  if ((tipo === 'meses' || tipo === 'general') && mostrar('meses')) {
+    addSectionTitle('Resumen mensual de ventas');
     const meses = calcularMeses(productos, ventas);
-    addTable(['Mes','N° ventas','Unidades','Total ingresado','Ganancia del mes'],
+    addTable(
+      ['Mes', 'N\u00b0 ventas', 'Unidades', 'Total ingresado', 'Ganancia del mes'],
       meses.map(m => [mesLabel(m.mes), m.numVentas, m.unidades, copFmt(m.total), copFmt(m.ganancia)]),
-      { 3:{halign:'right'}, 4:{halign:'right'} });
+      {
+        0: { cellWidth: 50 },
+        1: { cellWidth: 25, halign: 'center' },
+        2: { cellWidth: 25, halign: 'center' },
+        3: { cellWidth: 50, halign: 'right' },
+        4: { cellWidth: 50, halign: 'right' },
+      }
+    );
   }
 
-  if (tipo === 'stock' || tipo === 'general') {
-    addSectionTitle('📊 Estado del stock');
-    addTable(['SKU','Nombre','Categoría','Compradas','Vendidas','Stock actual','Estado stock','Estado'],
+  if ((tipo === 'stock' || tipo === 'general') && mostrar('stock')) {
+    addSectionTitle('Estado del stock');
+    addTable(
+      ['SKU', 'Nombre', 'Categoria', 'Compradas', 'Vendidas', 'Stock actual', 'Estado stock', 'Estado'],
       productos.map(p => [p.sku, p.nombre, p.categoria||'—', p.cantidad, p.unidadesVendidas, p.stockActual, p.estadoStock, p.estado]),
-      { 1:{cellWidth:55} });
+      {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 22, halign: 'center' },
+        4: { cellWidth: 22, halign: 'center' },
+        5: { cellWidth: 22, halign: 'center' },
+        6: { cellWidth: 25, halign: 'center' },
+        7: { cellWidth: 22, halign: 'center' },
+      }
+    );
   }
 
-  if (tipo === 'resumen' || tipo === 'general') {
-    addSectionTitle('💰 Resumen financiero');
-    addTable(['SKU','Nombre','Inversión','Recuperado','Ganancia','Recuperación %','Margen %'],
+  if ((tipo === 'resumen' || tipo === 'general') && mostrar('resumen')) {
+    addSectionTitle('Resumen financiero');
+    addTable(
+      ['SKU', 'Nombre', 'Inversion', 'Recuperado', 'Ganancia', 'Recuperacion %', 'Margen %'],
       productos.map(p => {
         const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) + '%' : '—';
         return [p.sku, p.nombre, copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia), p.recuperacionPct.toFixed(1)+'%', margen];
       }),
-      { 1:{cellWidth:55}, 2:{halign:'right'}, 3:{halign:'right'}, 4:{halign:'right'} });
+      {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 35, halign: 'right' },
+        3: { cellWidth: 35, halign: 'right' },
+        4: { cellWidth: 35, halign: 'right' },
+        5: { cellWidth: 28, halign: 'center' },
+        6: { cellWidth: 22, halign: 'center' },
+      }
+    );
   }
 
-  if (tipo === 'general') {
-    addSectionTitle('🔢 Totales generales');
+  if ((tipo === 'general') && mostrar('totales')) {
+    addSectionTitle('Totales generales');
     const totInv = productos.reduce((s,p) => s + p.inversionTotal, 0);
     const totRec = productos.reduce((s,p) => s + p.totalRecuperado, 0);
     const totGan = productos.reduce((s,p) => s + p.ganancia, 0);
-    addTable(['Indicador','Valor'], [
-      ['Total invertido', copFmt(totInv)],
-      ['Total recuperado', copFmt(totRec)],
-      ['Ganancia total', copFmt(totGan)],
-      ['Total productos', productos.length],
-      ['Total ventas registradas', ventas.length],
-    ], { 1:{halign:'right', fontStyle:'bold'} });
+    addTable(
+      ['Indicador', 'Valor'],
+      [
+        ['Total invertido', copFmt(totInv)],
+        ['Total recuperado', copFmt(totRec)],
+        ['Ganancia total', copFmt(totGan)],
+        ['Total productos', productos.length],
+        ['Total ventas registradas', ventas.length],
+      ],
+      {
+        0: { cellWidth: 80 },
+        1: { cellWidth: 60, halign: 'right', fontStyle: 'bold' },
+      }
+    );
   }
 
-  // Footer en todas las páginas
+  // Footer en todas las paginas
   const totalPags = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPags; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
-    doc.setTextColor(150);
-    doc.text(`Centris Inversiones · Generado el ${fecha} · Pág. ${i} de ${totalPags}`, 297/2, 205, { align: 'center' });
+    doc.setTextColor(160);
+    doc.text(`Centris Inversiones  \u00b7  Generado el ${fecha}  \u00b7  Pag. ${i} de ${totalPags}`, PW / 2, 206, { align: 'center' });
   }
 
   const fechaISO = new Date().toISOString().slice(0,10);

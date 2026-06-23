@@ -1136,85 +1136,114 @@ function openModalReporte() {
 
         <!-- Selector de formato -->
         <div class="reporte-formato-selector">
-          <span class="reporte-formato-label">Formato de descarga:</span>
+          <span class="reporte-formato-label">Formato:</span>
           <div class="reporte-formato-btns">
             <button class="reporte-fmt-btn active" id="fmt-excel" onclick="seleccionarFormato('excel')">
-              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
               Excel (.xlsx)
             </button>
             <button class="reporte-fmt-btn" id="fmt-pdf" onclick="seleccionarFormato('pdf')">
-              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
               PDF
             </button>
             <button class="reporte-fmt-btn" id="fmt-csv" onclick="seleccionarFormato('csv')">
-              <svg viewBox="0 0 24 24" width="18" height="18"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               CSV
             </button>
           </div>
         </div>
 
-        <div class="reporte-secciones-titulo">Selecciona qué incluir:</div>
-        <div class="reporte-opciones reporte-opciones-grid">
-
-          <div class="reporte-opt reporte-opt-destacado" onclick="descargarReporte('general')" data-tipo="general">
-            <div class="reporte-opt-icon">
-              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        <!-- Reporte general con checkboxes -->
+        <div class="reporte-seccion-bloque">
+          <div class="reporte-seccion-header">
+            <div class="reporte-seccion-info">
+              <div class="opt-title">Reporte General</div>
+              <div class="opt-desc">Elige qué secciones incluir en el archivo</div>
             </div>
-            <div class="reporte-opt-body">
-              <div class="opt-title">Reporte general completo</div>
-              <div class="opt-desc">Inventario · Ventas · Stock · Resumen financiero · Resumen mensual</div>
-            </div>
-            <span class="reporte-opt-badge">Recomendado</span>
+            <span class="reporte-opt-badge-inline">Recomendado</span>
           </div>
 
-          <div class="reporte-grid-2">
-            <div class="reporte-opt" onclick="descargarReporte('inventario')" data-tipo="inventario">
-              <div class="reporte-opt-icon reporte-opt-icon-sm">
-                <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-              </div>
+          <div class="rep-checks-grid">
+            <label class="rep-check-label">
+              <input type="checkbox" class="rep-check" value="inventario" checked>
+              <span class="rep-check-box"></span>
               <div>
-                <div class="opt-title">Inventario</div>
-                <div class="opt-desc">Productos, costos y ganancias</div>
+                <div class="rep-check-title">Inventario</div>
+                <div class="rep-check-desc">Productos, costos y ganancias</div>
               </div>
-            </div>
-            <div class="reporte-opt" onclick="descargarReporte('ventas')" data-tipo="ventas">
-              <div class="reporte-opt-icon reporte-opt-icon-sm">
-                <svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-              </div>
+            </label>
+            <label class="rep-check-label">
+              <input type="checkbox" class="rep-check" value="ventas" checked>
+              <span class="rep-check-box"></span>
               <div>
-                <div class="opt-title">Historial de ventas</div>
-                <div class="opt-desc">Todas las ventas con fechas y precios</div>
+                <div class="rep-check-title">Historial de ventas</div>
+                <div class="rep-check-desc">Todas las ventas con fechas</div>
               </div>
-            </div>
-            <div class="reporte-opt" onclick="descargarReporte('meses')" data-tipo="meses">
-              <div class="reporte-opt-icon reporte-opt-icon-sm">
-                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              </div>
+            </label>
+            <label class="rep-check-label">
+              <input type="checkbox" class="rep-check" value="meses" checked>
+              <span class="rep-check-box"></span>
               <div>
-                <div class="opt-title">Resumen mensual</div>
-                <div class="opt-desc">Ventas y ganancias por mes</div>
+                <div class="rep-check-title">Resumen mensual</div>
+                <div class="rep-check-desc">Ventas y ganancias por mes</div>
               </div>
-            </div>
-            <div class="reporte-opt" onclick="descargarReporte('stock')" data-tipo="stock">
-              <div class="reporte-opt-icon reporte-opt-icon-sm">
-                <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              </div>
+            </label>
+            <label class="rep-check-label">
+              <input type="checkbox" class="rep-check" value="stock" checked>
+              <span class="rep-check-box"></span>
               <div>
-                <div class="opt-title">Estado del stock</div>
-                <div class="opt-desc">Stock actual y alertas</div>
+                <div class="rep-check-title">Estado del stock</div>
+                <div class="rep-check-desc">Stock actual y alertas</div>
               </div>
-            </div>
-            <div class="reporte-opt" onclick="descargarReporte('resumen')" data-tipo="resumen">
-              <div class="reporte-opt-icon reporte-opt-icon-sm">
-                <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              </div>
+            </label>
+            <label class="rep-check-label">
+              <input type="checkbox" class="rep-check" value="resumen" checked>
+              <span class="rep-check-box"></span>
               <div>
-                <div class="opt-title">Resumen financiero</div>
-                <div class="opt-desc">Inversión vs ganancia</div>
+                <div class="rep-check-title">Resumen financiero</div>
+                <div class="rep-check-desc">Inversión vs ganancia por producto</div>
               </div>
-            </div>
+            </label>
+            <label class="rep-check-label">
+              <input type="checkbox" class="rep-check" value="totales" checked>
+              <span class="rep-check-box"></span>
+              <div>
+                <div class="rep-check-title">Totales generales</div>
+                <div class="rep-check-desc">Sumas globales del negocio</div>
+              </div>
+            </label>
+          </div>
+
+          <button class="btn-primary rep-descargar-btn" onclick="descargarReporte('general')">
+            ${ICONS.download} Descargar reporte general
+          </button>
+        </div>
+
+        <!-- Reportes individuales -->
+        <div class="reporte-individuales-titulo">O descarga un reporte específico:</div>
+        <div class="reporte-grid-2">
+          <div class="reporte-opt-mini" onclick="descargarReporte('inventario')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Inventario
+          </div>
+          <div class="reporte-opt-mini" onclick="descargarReporte('ventas')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            Ventas
+          </div>
+          <div class="reporte-opt-mini" onclick="descargarReporte('meses')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Mensual
+          </div>
+          <div class="reporte-opt-mini" onclick="descargarReporte('stock')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Stock
+          </div>
+          <div class="reporte-opt-mini" onclick="descargarReporte('resumen')">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Financiero
           </div>
         </div>
+
       </div>
       <div class="modal-footer">
         <button class="btn-secondary" onclick="closeModal()">Cerrar</button>
