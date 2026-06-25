@@ -65,74 +65,351 @@ function btnIcon(iconKey, title, onclick, extraClass = '') {
 
 async function renderDashboard() {
   const r = await calcularResumenGlobal();
-
-  // Mes seleccionado (por defecto el más reciente)
-  const mesActual = r.meses.length > 0 ? r.meses[0].mes : null;
   window._dashData = r;
-  window._dashMesSeleccionado = mesActual;
+
+  const mesActual = r.meses.length > 0 ? r.meses[0].mes : '';
+  const ventasIniciales = mesActual
+    ? r.ultimasVentas.filter(v => v.fecha && v.fecha.startsWith(mesActual))
+    : r.ultimasVentas;
+
+  // Productos únicos con ventas (para el select)
+  const productosConVentas = [...r.ultimasVentas.reduce((map, v) => {
+    if (!map.has(v.productoId)) map.set(v.productoId, v.producto?.nombre || '—');
+    return map;
+  }, new Map()).entries()];
 
   document.querySelector('#main-content').innerHTML = `
-    <div class="page-header">
-      <h1>Dashboard</h1>
-      <span class="subtitle">Resumen general de inversiones</span>
+
+    <!-- KPIs del mes/filtro activo — siempre arriba -->
+    <div id="dash-kpis-activos"></div>
+
+    <!-- Filtros: mes + producto + limpiar + registrar venta -->
+    <div class="dash-filtros-clean">
+      <div class="dash-filtro-group">
+        <label class="dash-filtro-label">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Mes
+        </label>
+        <select class="dash-select" id="dash-sel-mes" onchange="dashAplicarFiltros()">
+          <option value="">Todos los meses</option>
+          ${r.meses.map(m => `<option value="${m.mes}" ${m.mes === mesActual ? 'selected' : ''}>${formatearMesLabel(m.mes)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="dash-filtro-group">
+        <label class="dash-filtro-label">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+          Producto
+        </label>
+        <select class="dash-select" id="dash-sel-prod" onchange="dashAplicarFiltros()">
+          <option value="">Todos los productos</option>
+          ${productosConVentas.map(([id, nombre]) => `<option value="${id}">${nombre}</option>`).join('')}
+        </select>
+      </div>
+      <button class="dash-clear-btn" onclick="dashLimpiarFiltros()" title="Limpiar filtros">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Limpiar
+      </button>
+      <button class="btn-primary btn-registrar-venta" onclick="openModalVentaDashboard()">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Registrar venta
+      </button>
     </div>
 
-    <div class="kpi-grid">
-      ${kpiCard('Total Invertido', fmt.cop(r.totalInvertido), 'invest', 'kpi-blue')}
-      ${kpiCard('Total Recuperado', fmt.cop(r.totalRecuperado), 'recover', 'kpi-green')}
-      ${kpiCard('Ganancia Estimada', fmt.cop(r.gananciaTotal), 'profit', r.gananciaTotal >= 0 ? 'kpi-teal' : 'kpi-red')}
-      ${kpiCard('Productos', r.totalProductos, 'box', 'kpi-purple')}
-      ${kpiCard('Unidades en Stock', fmt.num(r.unidadesTotalesStock), 'stock', 'kpi-orange')}
-      ${kpiCard('Unidades Vendidas', fmt.num(r.unidadesTotalesVendidas), 'sold', 'kpi-slate')}
-    </div>
-
-    <div class="dash-grid" style="grid-template-columns: 1fr;">
-      <div class="card">
-        <div class="card-header" style="align-items:center;flex-wrap:wrap;gap:12px;">
-          <h3 style="margin:0">Historial de ventas</h3>
-          <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
-            ${r.meses.length > 0 ? `
-            <div class="dash-mes-selector">
-              <label style="font-size:.8rem;color:var(--text-muted);font-weight:500;">Filtrar por mes:</label>
-              <select id="dash-mes-select" onchange="filtrarVentasMes(this.value)" class="select-mes">
-                <option value="">— Todos —</option>
-                ${r.meses.map(m => `<option value="${m.mes}" ${m.mes === mesActual ? 'selected' : ''}>${formatearMesLabel(m.mes)}</option>`).join('')}
-              </select>
-            </div>` : ''}
-            <button class="btn-link" onclick="navigate('productos')">Ver productos →</button>
-          </div>
-        </div>
-
-        <!-- KPIs del mes -->
-        <div id="dash-mes-kpis"></div>
-
-        <div class="table-wrap" style="max-height: 560px; overflow-y: auto;">
-          <table id="dash-ventas-table">
-            <thead><tr><th>ID Venta</th><th>Producto</th><th>Fecha</th><th>Cliente</th><th>Teléfono</th><th>Cant.</th><th>Precio venta</th><th>Ganancia</th></tr></thead>
-            <tbody id="dash-ventas-body">
-              ${renderVentasBody(r.ultimasVentas.filter(v => !mesActual || (v.fecha && v.fecha.startsWith(mesActual))))}
-            </tbody>
-          </table>
-        </div>
+    <div class="card">
+      <div class="card-header">
+        <h3 id="dash-tabla-titulo">Ventas — ${formatearMesLabel(mesActual) || 'Todos los meses'}</h3>
+        <span id="dash-tabla-count" class="badge-count">${ventasIniciales.length} registros</span>
+      </div>
+      <div class="table-wrap" style="max-height:560px;overflow-y:auto">
+        <table>
+          <thead><tr>
+            <th>ID Venta</th><th>Producto</th><th>Fecha</th>
+            <th>Cliente</th><th>Teléfono</th><th>Cant.</th>
+            <th>Precio venta</th><th>Ganancia</th>
+          </tr></thead>
+          <tbody id="dash-ventas-body">
+            ${renderVentasBody(ventasIniciales)}
+          </tbody>
+        </table>
       </div>
     </div>
 
-      ${r.productosStockBajo.length > 0 ? `
-        <button class="stock-alert-fab" onclick="openModalAlertas()" title="Ver alertas de stock">
-          <svg viewBox="0 0 24 24" width="22" height="22" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-          <span class="stock-alert-count">${r.productosStockBajo.length}</span>
-        </button>` : ''}
-    </div>
+    ${r.productosStockBajo.length > 0 ? `
+      <button class="stock-alert-fab" onclick="openModalAlertas()" title="Ver alertas de stock">
+        <svg viewBox="0 0 24 24" width="22" height="22" stroke="white" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span class="stock-alert-count">${r.productosStockBajo.length}</span>
+      </button>` : ''}
   `;
 
-  // Renderizar KPIs del mes seleccionado
-  if (mesActual) actualizarKpisMes(mesActual);
-
   window._productosStockBajo = r.productosStockBajo;
+  dashMostrarKpis(mesActual, '');
 }
+
+function dashAplicarFiltros() {
+  const mes = document.getElementById('dash-sel-mes')?.value || '';
+  const prod = document.getElementById('dash-sel-prod')?.value || '';
+  const r = window._dashData;
+  if (!r) return;
+
+  let ventas = r.ultimasVentas;
+  if (mes) ventas = ventas.filter(v => v.fecha && v.fecha.startsWith(mes));
+  if (prod) ventas = ventas.filter(v => v.productoId === prod);
+
+  const nombreProd = prod ? r.ultimasVentas.find(v => v.productoId === prod)?.producto?.nombre : '';
+  let titulo = 'Todas las ventas';
+  if (mes && nombreProd) titulo = `${nombreProd} — ${formatearMesLabel(mes)}`;
+  else if (mes) titulo = `Ventas — ${formatearMesLabel(mes)}`;
+  else if (nombreProd) titulo = `Ventas — ${nombreProd}`;
+
+  document.getElementById('dash-tabla-titulo').textContent = titulo;
+  document.getElementById('dash-tabla-count').textContent = `${ventas.length} registros`;
+
+  // Animar salida de filas y entrada de nuevas
+  const tbody = document.getElementById('dash-ventas-body');
+  if (tbody) {
+    tbody.style.opacity = '0';
+    tbody.style.transform = 'translateY(6px)';
+    tbody.style.transition = 'opacity .18s ease, transform .18s ease';
+    setTimeout(() => {
+      tbody.innerHTML = renderVentasBody(ventas);
+      tbody.style.opacity = '1';
+      tbody.style.transform = 'translateY(0)';
+    }, 180);
+  }
+
+  dashMostrarKpis(mes, prod);
+}
+
+function dashLimpiarFiltros() {
+  const selMes = document.getElementById('dash-sel-mes');
+  const selProd = document.getElementById('dash-sel-prod');
+  if (selMes) selMes.value = '';
+  if (selProd) selProd.value = '';
+  dashAplicarFiltros();
+}
+
+// ─── CONTADOR ANIMADO ─────────────────────────────────────────────────────
+function animarContador(el, desde, hasta, duracion, esCOP = false) {
+  if (!el) return;
+  const inicio = performance.now();
+  const diff = hasta - desde;
+  const easing = t => t < .5 ? 2*t*t : -1+(4-2*t)*t; // ease-in-out quad
+
+  function step(ahora) {
+    const elapsed = ahora - inicio;
+    const t = Math.min(elapsed / duracion, 1);
+    const valor = Math.round(desde + diff * easing(t));
+    el.textContent = esCOP
+      ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(valor)
+      : new Intl.NumberFormat('es-CO').format(valor);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function dashMostrarKpis(mes, prod = '') {
+  const r = window._dashData;
+  const container = document.getElementById('dash-kpis-activos');
+  if (!container || !r) return;
+
+  let ventas = r.ultimasVentas;
+  if (mes)  ventas = ventas.filter(v => v.fecha && v.fecha.startsWith(mes));
+  if (prod) ventas = ventas.filter(v => v.productoId === prod);
+
+  const totalFilt = ventas.reduce((s, v) => s + (v.cantidad * v.precioUnitario), 0);
+  const ganFilt   = ventas.reduce((s, v) => s + (v.gananciaVenta || 0), 0);
+  const unidFilt  = ventas.reduce((s, v) => s + (v.cantidad || 0), 0);
+  const ganPos    = ganFilt >= 0;
+
+  // Leer valores previos para animar desde ellos
+  const prev = window._dashKpiPrev || { ventas: 0, unidades: 0, total: 0, ganancia: 0 };
+
+  // Si ya existe el grid solo animar los valores, si no renderizar HTML completo
+  const existente = container.querySelector('.dash-kpi-grid');
+
+  if (!existente) {
+    container.innerHTML = `
+      <div class="dash-kpi-grid">
+        <div class="dash-kpi-card dash-kpi-ventas">
+          <div class="dash-kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+          </div>
+          <div class="dash-kpi-body">
+            <span class="dash-kpi-label">Ventas</span>
+            <span class="dash-kpi-value" id="kpi-val-ventas">0</span>
+            <span class="dash-kpi-sub">transacciones</span>
+          </div>
+          <div class="dash-kpi-glow"></div>
+        </div>
+
+        <div class="dash-kpi-card dash-kpi-unidades">
+          <div class="dash-kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+              <line x1="12" y1="22.08" x2="12" y2="12"/>
+            </svg>
+          </div>
+          <div class="dash-kpi-body">
+            <span class="dash-kpi-label">Unidades vendidas</span>
+            <span class="dash-kpi-value" id="kpi-val-unidades">0</span>
+            <span class="dash-kpi-sub">unidades</span>
+          </div>
+          <div class="dash-kpi-glow"></div>
+        </div>
+
+        <div class="dash-kpi-card dash-kpi-ingresos">
+          <div class="dash-kpi-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="dash-kpi-body">
+            <span class="dash-kpi-label">Total ingresado</span>
+            <span class="dash-kpi-value" id="kpi-val-total">$ 0</span>
+            <span class="dash-kpi-sub">ingresos brutos</span>
+          </div>
+          <div class="dash-kpi-glow"></div>
+        </div>
+
+        <div class="dash-kpi-card dash-kpi-ganancia" id="kpi-card-gan">
+          <div class="dash-kpi-icon-wrap" id="kpi-icon-gan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+              <polyline points="17 6 23 6 23 12"/>
+            </svg>
+          </div>
+          <div class="dash-kpi-body">
+            <span class="dash-kpi-label">Ganancia neta</span>
+            <span class="dash-kpi-value" id="kpi-val-ganancia">$ 0</span>
+            <span class="dash-kpi-sub" id="kpi-sub-gan">beneficio</span>
+          </div>
+          <div class="dash-kpi-glow"></div>
+        </div>
+      </div>`;
+
+    // Animar entrada de cards
+    const cards = container.querySelectorAll('.dash-kpi-card');
+    cards.forEach((c, i) => {
+      c.style.opacity = '0';
+      c.style.transform = 'translateY(12px)';
+      c.style.transition = `opacity .3s ease ${i * 60}ms, transform .3s ease ${i * 60}ms`;
+      requestAnimationFrame(() => {
+        c.style.opacity = '1';
+        c.style.transform = 'translateY(0)';
+      });
+    });
+  }
+
+  // Actualizar card de ganancia si cambió positivo/negativo
+  const cardGan = document.getElementById('kpi-card-gan');
+  const iconGan = document.getElementById('kpi-icon-gan');
+  const subGan  = document.getElementById('kpi-sub-gan');
+  if (cardGan) {
+    cardGan.className = `dash-kpi-card ${ganPos ? 'dash-kpi-ganancia' : 'dash-kpi-perdida'}`;
+  }
+  if (iconGan) {
+    iconGan.innerHTML = ganPos
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`;
+  }
+  if (subGan) subGan.textContent = ganPos ? 'beneficio' : 'pérdida';
+
+  // Animar números desde valor anterior al nuevo
+  const DUR = 600;
+  animarContador(document.getElementById('kpi-val-ventas'),   prev.ventas,   ventas.length, DUR, false);
+  animarContador(document.getElementById('kpi-val-unidades'), prev.unidades, unidFilt,      DUR, false);
+  animarContador(document.getElementById('kpi-val-total'),    prev.total,    totalFilt,     DUR, true);
+  animarContador(document.getElementById('kpi-val-ganancia'), prev.ganancia, ganFilt,       DUR, true);
+
+  // Guardar para la próxima animación
+  window._dashKpiPrev = { ventas: ventas.length, unidades: unidFilt, total: totalFilt, ganancia: ganFilt };
+}
+
+// Modal para registrar venta desde dashboard (primero seleccionar producto)
+async function openModalVentaDashboard() {
+  startProgress();
+  const productos = await getProductosEnriquecidos();
+  const activos = productos.filter(p => p.stockActual > 0);
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-picker">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="picker-header-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          </div>
+          <div>
+            <h2 style="margin:0;font-size:1rem">Registrar venta</h2>
+            <p style="margin:0;font-size:.75rem;color:var(--text-muted);font-weight:400">Selecciona el producto a vender</p>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+      </div>
+
+      <div class="picker-search-wrap">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="picker-search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="picker-search" placeholder="Buscar por nombre o SKU..." oninput="filtrarPicker(this.value)" class="picker-search-input">
+        <span id="picker-count" class="picker-count">${activos.length} productos</span>
+      </div>
+
+      <div class="picker-list-wrap">
+        ${activos.length === 0
+          ? '<div class="picker-empty"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg><p>No hay productos con stock disponible</p></div>'
+          : '<div id="prod-picker-list" class="prod-picker-list">' +
+            activos.map(p => `
+              <div class="prod-picker-item" onclick="closeModal(); openModalVenta('${p.id}')">
+                <div class="prod-picker-img">${imagenProducto(p.imagen, p.nombre, 44)}</div>
+                <div class="prod-picker-info">
+                  <div class="prod-picker-nombre">${p.nombre}</div>
+                  <div class="prod-picker-meta">
+                    <span class="sku-small">${p.sku}</span>
+                    <span class="prod-picker-stock-badge ${p.stockActual <= 3 ? 'stock-bajo' : ''}">
+                      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                      ${p.stockActual} en stock
+                    </span>
+                    ${p.precioSugerido ? `<span class="prod-picker-precio">${fmt.cop(p.precioSugerido)}</span>` : ''}
+                  </div>
+                </div>
+                <div class="prod-picker-arrow-wrap">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
+              </div>`).join('') + '</div>'}
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      </div>
+    </div>
+  `;
+  openModalAnimate();
+  doneProgress();
+  setTimeout(() => document.getElementById('picker-search')?.focus(), 100);
+}
+
+function filtrarPicker(q) {
+  const items = document.querySelectorAll('.prod-picker-item');
+  const ql = q.toLowerCase().trim();
+  let visible = 0;
+  items.forEach(item => {
+    const nombre = item.querySelector('.prod-picker-nombre')?.textContent.toLowerCase() || '';
+    const sku = item.querySelector('.sku-small')?.textContent.toLowerCase() || '';
+    const show = !ql || nombre.includes(ql) || sku.includes(ql);
+    item.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  const cnt = document.getElementById('picker-count');
+  if (cnt) cnt.textContent = visible + ' producto' + (visible !== 1 ? 's' : '');
+}
+
 
 function formatearMesLabel(mesStr) {
   if (!mesStr || mesStr === 'sin-fecha') return 'Sin fecha';
@@ -554,75 +831,193 @@ function tipoMovLabel(tipo) {
 
 async function renderReportes() {
   const r = await getReportes();
+  const res = await calcularResumenGlobal();
+
+  // Totales globales para las cards resumen
+  const totInv = res.totalInvertido;
+  const totRec = res.totalRecuperado;
+  const totGan = res.gananciaTotal;
+  const pctRec = totInv > 0 ? (totRec / totInv * 100).toFixed(1) : 0;
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
-      <h1>Reportes</h1>
-      <span class="subtitle">Análisis de inversiones y ventas</span>
-      <button class="btn-download" onclick="openModalReporte()">
-        ${ICONS.download}
+      <div>
+        <h1>Reportes</h1>
+        <span class="subtitle">Analisis financiero y de ventas</span>
+      </div>
+      <button class="btn-primary" onclick="openModalReporte()">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Descargar reporte
       </button>
     </div>
 
-    <div class="reportes-tabs">
-      <button class="tab active" onclick="switchTab(this,'rep-inversion')">Mayor inversión</button>
-      <button class="tab" onclick="switchTab(this,'rep-ganancia')">Mayor ganancia</button>
-      <button class="tab" onclick="switchTab(this,'rep-movimiento')">Menos movimiento</button>
-      <button class="tab" onclick="switchTab(this,'rep-categorias')">Por categoría</button>
-      <button class="tab" onclick="switchTab(this,'rep-meses')">Por mes</button>
-      <button class="tab" onclick="switchTab(this,'rep-agotados')">Agotados</button>
+    <!-- Resumen financiero global en 4 tarjetas grandes -->
+    <div class="rep-resumen-grid">
+      <div class="rep-resumen-card rep-card-inv">
+        <div class="rep-resumen-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <div class="rep-resumen-body">
+          <div class="rep-resumen-label">Total Invertido</div>
+          <div class="rep-resumen-valor">${fmt.cop(totInv)}</div>
+          <div class="rep-resumen-sub">${res.totalProductos} productos</div>
+        </div>
+      </div>
+      <div class="rep-resumen-card rep-card-rec">
+        <div class="rep-resumen-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+        <div class="rep-resumen-body">
+          <div class="rep-resumen-label">Total Recuperado</div>
+          <div class="rep-resumen-valor">${fmt.cop(totRec)}</div>
+          <div class="rep-resumen-sub">${pctRec}% de la inversión</div>
+        </div>
+      </div>
+      <div class="rep-resumen-card ${totGan >= 0 ? 'rep-card-gan' : 'rep-card-neg'}">
+        <div class="rep-resumen-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12l4-4 4 4"/></svg>
+        </div>
+        <div class="rep-resumen-body">
+          <div class="rep-resumen-label">Ganancia Total</div>
+          <div class="rep-resumen-valor">${fmt.cop(totGan)}</div>
+          <div class="rep-resumen-sub">${res.unidadesTotalesVendidas} unidades vendidas</div>
+        </div>
+      </div>
+      <div class="rep-resumen-card rep-card-stock">
+        <div class="rep-resumen-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <div class="rep-resumen-body">
+          <div class="rep-resumen-label">Stock Disponible</div>
+          <div class="rep-resumen-valor">${fmt.num(res.unidadesTotalesStock)}</div>
+          <div class="rep-resumen-sub">${r.agotados.length} productos agotados</div>
+        </div>
+      </div>
     </div>
 
-    <div id="rep-inversion" class="tab-content active card">
-      <h3 class="reporte-titulo">Productos con mayor inversión</h3>
-      ${tablaRanking(r.mayorInversion, 'inversionTotal', 'Inversión')}
+    <!-- Tabs con iconos -->
+    <div class="reportes-tabs-wrap">
+      <div class="reportes-tabs">
+        <button class="tab active" onclick="switchTab(this,'rep-meses')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Por mes
+        </button>
+        <button class="tab" onclick="switchTab(this,'rep-inversion')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          Mayor inversión
+        </button>
+        <button class="tab" onclick="switchTab(this,'rep-ganancia')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          Mayor ganancia
+        </button>
+        <button class="tab" onclick="switchTab(this,'rep-movimiento')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Menos movimiento
+        </button>
+        <button class="tab" onclick="switchTab(this,'rep-categorias')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Por categoría
+        </button>
+        <button class="tab" onclick="switchTab(this,'rep-agotados')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          Agotados ${r.agotados.length > 0 ? `<span class="tab-badge">${r.agotados.length}</span>` : ''}
+        </button>
+      </div>
     </div>
 
-    <div id="rep-ganancia" class="tab-content card" style="display:none">
-      <h3 class="reporte-titulo">Productos con mayor ganancia</h3>
-      ${tablaRanking(r.mayorGanancia, 'ganancia', 'Ganancia')}
-    </div>
-
-    <div id="rep-movimiento" class="tab-content card" style="display:none">
-      <h3 class="reporte-titulo">Productos con menos movimiento</h3>
-      ${tablaRanking(r.menosMovimiento, 'numVentas', 'N° ventas', true)}
-    </div>
-
-    <div id="rep-categorias" class="tab-content card" style="display:none">
-      <h3 class="reporte-titulo">Resumen por categoría</h3>
+    <div id="rep-meses" class="tab-content active card">
+      <div class="rep-tab-header">
+        <div class="rep-tab-icon rep-icon-cal"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+        <div>
+          <h3 class="rep-tab-titulo">Resumen mensual de ventas</h3>
+          <p class="rep-tab-desc">Ventas, unidades y ganancias agrupadas por mes</p>
+        </div>
+        <div class="rep-tab-stat-right">
+          <span class="rep-stat-badge">${r.meses.length} meses</span>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Categoría</th><th>Productos</th><th>Inversión</th><th>Recuperado</th><th>Ganancia</th></tr></thead>
+          <thead><tr><th>#</th><th>Mes</th><th>N° ventas</th><th>Unidades</th><th>Total ingresado</th><th>Ganancia del mes</th></tr></thead>
           <tbody>
-            ${r.categorias.map(c => `
-              <tr>
-                <td class="fw600">${c.nombre}</td>
-                <td>${c.productos}</td>
-                <td>${fmt.cop(c.inversion)}</td>
-                <td>${fmt.cop(c.recuperado)}</td>
-                <td class="${c.ganancia >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(c.ganancia)}</td>
-              </tr>`).join('')}
+            ${r.meses.length === 0
+              ? '<tr><td colspan="6" class="empty">Sin ventas registradas</td></tr>'
+              : r.meses.map((m, i) => `
+                <tr>
+                  <td class="rank">${i + 1}</td>
+                  <td class="fw600">${formatearMesLabel(m.mes)}</td>
+                  <td>${m.numVentas}</td>
+                  <td>${m.unidades}</td>
+                  <td class="text-success fw600">${fmt.cop(m.total)}</td>
+                  <td class="${m.ganancia >= 0 ? 'text-success' : 'text-danger'} fw600">${fmt.cop(m.ganancia)}</td>
+                </tr>`).join('')}
           </tbody>
         </table>
       </div>
     </div>
 
-    <div id="rep-meses" class="tab-content card" style="display:none">
-      <h3 class="reporte-titulo">Resumen mensual de ventas</h3>
+    <div id="rep-inversion" class="tab-content card" style="display:none">
+      <div class="rep-tab-header">
+        <div class="rep-tab-icon rep-icon-inv"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div>
+          <h3 class="rep-tab-titulo">Productos con mayor inversión</h3>
+          <p class="rep-tab-desc">Ranking por capital invertido total</p>
+        </div>
+        <div class="rep-tab-stat-right">
+          <span class="rep-stat-badge">${r.mayorInversion.length} productos</span>
+        </div>
+      </div>
+      ${tablaRanking(r.mayorInversion, 'inversionTotal', 'Inversión')}
+    </div>
+
+    <div id="rep-ganancia" class="tab-content card" style="display:none">
+      <div class="rep-tab-header">
+        <div class="rep-tab-icon rep-icon-gan"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+        <div>
+          <h3 class="rep-tab-titulo">Productos con mayor ganancia</h3>
+          <p class="rep-tab-desc">Ranking por rentabilidad generada</p>
+        </div>
+        <div class="rep-tab-stat-right">
+          <span class="rep-stat-badge">${r.mayorGanancia.length} productos</span>
+        </div>
+      </div>
+      ${tablaRanking(r.mayorGanancia, 'ganancia', 'Ganancia')}
+    </div>
+
+    <div id="rep-movimiento" class="tab-content card" style="display:none">
+      <div class="rep-tab-header">
+        <div class="rep-tab-icon rep-icon-mov"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+        <div>
+          <h3 class="rep-tab-titulo">Productos con menos movimiento</h3>
+          <p class="rep-tab-desc">Productos que menos se han vendido</p>
+        </div>
+      </div>
+      ${tablaRanking(r.menosMovimiento, 'numVentas', 'N° ventas', true)}
+    </div>
+
+    <div id="rep-categorias" class="tab-content card" style="display:none">
+      <div class="rep-tab-header">
+        <div class="rep-tab-icon rep-icon-cat"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+        <div>
+          <h3 class="rep-tab-titulo">Resumen por categoría</h3>
+          <p class="rep-tab-desc">Inversión y rentabilidad agrupada por categoría</p>
+        </div>
+        <div class="rep-tab-stat-right">
+          <span class="rep-stat-badge">${r.categorias.length} categorías</span>
+        </div>
+      </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Mes</th><th>N° ventas</th><th>Unidades</th><th>Total ingresado</th><th>Ganancia del mes</th></tr></thead>
+          <thead><tr><th>Categoría</th><th>Productos</th><th>Inversión</th><th>Recuperado</th><th>Ganancia</th></tr></thead>
           <tbody>
-            ${r.meses.length === 0
-              ? '<tr><td colspan="5" class="empty">Sin ventas registradas</td></tr>'
-              : r.meses.map(m => `
+            ${r.categorias.length === 0 ? '<tr><td colspan="5" class="empty">Sin categorías</td></tr>' :
+              r.categorias.map(c => `
                 <tr>
-                  <td class="fw600">${formatearMesLabel(m.mes)}</td>
-                  <td>${m.numVentas}</td>
-                  <td>${m.unidades}</td>
-                  <td>${fmt.cop(m.total)}</td>
-                  <td class="${m.ganancia >= 0 ? 'text-success' : 'text-danger'}">${fmt.cop(m.ganancia)}</td>
+                  <td class="fw600">${c.nombre}</td>
+                  <td>${c.productos}</td>
+                  <td>${fmt.cop(c.inversion)}</td>
+                  <td>${fmt.cop(c.recuperado)}</td>
+                  <td class="${c.ganancia >= 0 ? 'text-success' : 'text-danger'} fw600">${fmt.cop(c.ganancia)}</td>
                 </tr>`).join('')}
           </tbody>
         </table>
@@ -630,14 +1025,22 @@ async function renderReportes() {
     </div>
 
     <div id="rep-agotados" class="tab-content card" style="display:none">
-      <h3 class="reporte-titulo">Productos agotados (${r.agotados.length})</h3>
+      <div class="rep-tab-header">
+        <div class="rep-tab-icon rep-icon-agot"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg></div>
+        <div>
+          <h3 class="rep-tab-titulo">Productos agotados</h3>
+          <p class="rep-tab-desc">Productos sin stock disponible — requieren reposición</p>
+        </div>
+        <div class="rep-tab-stat-right">
+          <span class="rep-stat-badge rep-badge-red">${r.agotados.length} agotados</span>
+        </div>
+      </div>
       ${r.agotados.length === 0
         ? '<p class="empty-state">No hay productos agotados.</p>'
         : tablaRanking(r.agotados, 'totalRecuperado', 'Recuperado')}
     </div>
   `;
 }
-
 function tablaRanking(lista, campoValor, labelValor, esNumero = false) {
   if (!lista.length) return '<p class="empty-state">Sin datos suficientes.</p>';
   return `
@@ -1124,41 +1527,66 @@ function openModalEliminar(id) {
 
 // ─── MODAL DESCARGA REPORTE ──────────────────────────────────────────────
 
-function openModalReporte() {
+async function openModalReporte() {
   startProgress();
+  const r = await getReportes();
+  const meses = r.meses || [];
+
   document.getElementById('modal-overlay').innerHTML = `
     <div class="modal modal-reporte">
       <div class="modal-header">
-        <h2>Generar reporte</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="modal-header-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <h2>Generar reporte</h2>
+        </div>
         <button class="modal-close" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
 
-        <!-- Selector de formato -->
-        <div class="reporte-formato-selector">
-          <span class="reporte-formato-label">Formato:</span>
+        <!-- Formato -->
+        <div class="rep-config-row">
+          <div class="rep-config-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Formato
+          </div>
           <div class="reporte-formato-btns">
             <button class="reporte-fmt-btn active" id="fmt-excel" onclick="seleccionarFormato('excel')">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
-              Excel (.xlsx)
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+              Excel
             </button>
             <button class="reporte-fmt-btn" id="fmt-pdf" onclick="seleccionarFormato('pdf')">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
               PDF
             </button>
             <button class="reporte-fmt-btn" id="fmt-csv" onclick="seleccionarFormato('csv')">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               CSV
             </button>
           </div>
         </div>
 
+        <!-- Mes -->
+        <div class="rep-config-row">
+          <div class="rep-config-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Periodo
+          </div>
+          <select id="rep-mes-select" class="select-mes" style="flex:1;max-width:220px">
+            <option value="">Todos los meses</option>
+            ${meses.map(m => `<option value="${m.mes}">${formatearMesLabel(m.mes)}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="rep-divider"></div>
+
         <!-- Reporte general con checkboxes -->
         <div class="reporte-seccion-bloque">
           <div class="reporte-seccion-header">
             <div class="reporte-seccion-info">
-              <div class="opt-title">Reporte General</div>
-              <div class="opt-desc">Elige qué secciones incluir en el archivo</div>
+              <div class="opt-title">Reporte general personalizado</div>
+              <div class="opt-desc">Elige qué secciones incluir</div>
             </div>
             <span class="reporte-opt-badge-inline">Recomendado</span>
           </div>
@@ -1168,79 +1596,97 @@ function openModalReporte() {
               <input type="checkbox" class="rep-check" value="inventario" checked>
               <span class="rep-check-box"></span>
               <div>
-                <div class="rep-check-title">Inventario</div>
-                <div class="rep-check-desc">Productos, costos y ganancias</div>
+                <div class="rep-check-title">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                  Inventario
+                </div>
+                <div class="rep-check-desc">Productos y costos</div>
               </div>
             </label>
             <label class="rep-check-label">
               <input type="checkbox" class="rep-check" value="ventas" checked>
               <span class="rep-check-box"></span>
               <div>
-                <div class="rep-check-title">Historial de ventas</div>
-                <div class="rep-check-desc">Todas las ventas con fechas</div>
+                <div class="rep-check-title">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+                  Historial ventas
+                </div>
+                <div class="rep-check-desc">Todas las ventas</div>
               </div>
             </label>
             <label class="rep-check-label">
               <input type="checkbox" class="rep-check" value="meses" checked>
               <span class="rep-check-box"></span>
               <div>
-                <div class="rep-check-title">Resumen mensual</div>
-                <div class="rep-check-desc">Ventas y ganancias por mes</div>
+                <div class="rep-check-title">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  Resumen mensual
+                </div>
+                <div class="rep-check-desc">Ganancias por mes</div>
               </div>
             </label>
             <label class="rep-check-label">
               <input type="checkbox" class="rep-check" value="stock" checked>
               <span class="rep-check-box"></span>
               <div>
-                <div class="rep-check-title">Estado del stock</div>
-                <div class="rep-check-desc">Stock actual y alertas</div>
+                <div class="rep-check-title">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/></svg>
+                  Estado stock
+                </div>
+                <div class="rep-check-desc">Stock y alertas</div>
               </div>
             </label>
             <label class="rep-check-label">
               <input type="checkbox" class="rep-check" value="resumen" checked>
               <span class="rep-check-box"></span>
               <div>
-                <div class="rep-check-title">Resumen financiero</div>
-                <div class="rep-check-desc">Inversión vs ganancia por producto</div>
+                <div class="rep-check-title">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                  Resumen financiero
+                </div>
+                <div class="rep-check-desc">Inversion vs ganancia</div>
               </div>
             </label>
             <label class="rep-check-label">
               <input type="checkbox" class="rep-check" value="totales" checked>
               <span class="rep-check-box"></span>
               <div>
-                <div class="rep-check-title">Totales generales</div>
-                <div class="rep-check-desc">Sumas globales del negocio</div>
+                <div class="rep-check-title">
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  Totales generales
+                </div>
+                <div class="rep-check-desc">Sumas globales</div>
               </div>
             </label>
           </div>
 
           <button class="btn-primary rep-descargar-btn" onclick="descargarReporte('general')">
-            ${ICONS.download} Descargar reporte general
+            ${ICONS.download} Generar reporte general
           </button>
         </div>
 
         <!-- Reportes individuales -->
-        <div class="reporte-individuales-titulo">O descarga un reporte específico:</div>
+        <div class="reporte-individuales-titulo">O descarga solo una seccion:</div>
         <div class="reporte-grid-2">
           <div class="reporte-opt-mini" onclick="descargarReporte('inventario')">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
             Inventario
           </div>
           <div class="reporte-opt-mini" onclick="descargarReporte('ventas')">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-            Ventas
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            Historial de ventas
           </div>
           <div class="reporte-opt-mini" onclick="descargarReporte('meses')">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Mensual
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Resumen mensual
           </div>
           <div class="reporte-opt-mini" onclick="descargarReporte('stock')">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            Stock
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Estado del stock
           </div>
           <div class="reporte-opt-mini" onclick="descargarReporte('resumen')">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-            Financiero
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Resumen financiero
           </div>
         </div>
 
@@ -1263,28 +1709,122 @@ function seleccionarFormato(fmt) {
 
 // ─── VISTA FIREBASE ────────────────────────────────────────────────────────
 
-async function renderFirebase() {
+async function renderConfiguracion() {
+  startProgress();
   const cfg = await getConfig();
   const conectado = !!cfg.firebaseConectado;
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
-      <h1>Firebase</h1>
-      <span class="firebase-status ${conectado ? 'on' : 'off'}">
-        ${conectado ? 'Conectado' : 'Sin conectar'}
-      </span>
+      <div>
+        <h1>Configuración</h1>
+        <span class="subtitle">Personalización y ajustes del sistema</span>
+      </div>
     </div>
 
-    <div class="firebase-panel">
-      <h3>Sincronización en la nube activa</h3>
-      <p>Los datos se guardan en Firebase Firestore y se sincronizan entre todos tus dispositivos en tiempo real.</p>
+    <!-- Apariencia -->
+    <div class="config-seccion">
+      <div class="config-seccion-header">
+        <div class="config-seccion-icon config-icon-apariencia">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </div>
+        <div>
+          <h3>Apariencia</h3>
+          <p>Logo e identidad visual de la app</p>
+        </div>
+      </div>
+
+      <div class="config-item">
+        <div class="config-item-info">
+          <div class="config-item-label">Logo de la aplicación</div>
+          <div class="config-item-desc">Se muestra en la esquina superior derecha. Formatos: PNG, JPG, SVG.</div>
+        </div>
+        <div class="config-logo-preview">
+          ${cfg.logoDataUrl
+            ? `<img id="cfg-logo-preview" src="${cfg.logoDataUrl}" alt="Logo actual" class="cfg-logo-img">`
+            : `<div id="cfg-logo-preview" class="cfg-logo-placeholder">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                Sin logo
+              </div>`}
+          <div class="cfg-logo-btns">
+            <button class="btn-primary cfg-btn-sm" onclick="document.getElementById('logo-file-input').click()">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              ${cfg.logoDataUrl ? 'Cambiar logo' : 'Subir logo'}
+            </button>
+            ${cfg.logoDataUrl ? `<button class="btn-secondary cfg-btn-sm" onclick="eliminarLogo()">Eliminar</button>` : ''}
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div style="margin-top:20px;display:flex;gap:10px">
-      <button class="btn-primary" onclick="marcarFirebaseConectado()">Marcar como conectado</button>
-      <button class="btn-secondary" onclick="navigate('dashboard')">Volver al dashboard</button>
+    <!-- Firebase -->
+    <div class="config-seccion">
+      <div class="config-seccion-header">
+        <div class="config-seccion-icon config-icon-firebase">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <h3>Firebase / Base de datos</h3>
+          <p>Estado de la sincronización en la nube</p>
+        </div>
+      </div>
+
+      <div class="config-item">
+        <div class="config-item-info">
+          <div class="config-item-label">Estado de sincronización</div>
+          <div class="config-item-desc">Los datos se guardan en Firebase Firestore y se sincronizan entre dispositivos en tiempo real.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="firebase-status ${conectado ? 'on' : 'off'}">
+            <span class="firebase-dot"></span>
+            ${conectado ? 'Conectado' : 'Sin conectar'}
+          </span>
+          <button class="btn-secondary cfg-btn-sm" onclick="marcarFirebaseConectado()">
+            Marcar conectado
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Acerca de -->
+    <div class="config-seccion">
+      <div class="config-seccion-header">
+        <div class="config-seccion-icon config-icon-info">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div>
+          <h3>Acerca de</h3>
+          <p>Información de la aplicación</p>
+        </div>
+      </div>
+      <div class="config-item">
+        <div class="config-item-info">
+          <div class="config-item-label">Centris Inversiones</div>
+          <div class="config-item-desc">Control de inversiones, ventas e inventario. Versión 2.3</div>
+        </div>
+      </div>
     </div>
   `;
+  doneProgress();
+}
+
+async function eliminarLogo() {
+  try {
+    const cfg = await getConfig();
+    await saveConfig({ ...cfg, logoDataUrl: null });
+    const img = document.getElementById('header-logo-img');
+    const fallback = document.getElementById('header-avatar-fallback');
+    if (img) { img.src = ''; img.style.display = 'none'; }
+    if (fallback) fallback.style.display = 'flex';
+    mostrarAlerta('Logo eliminado.', 'success');
+    await renderConfiguracion();
+  } catch(e) {
+    mostrarAlerta('Error al eliminar el logo.', 'error');
+  }
+}
+
+async function renderFirebase() {
+  navigate('configuracion');
 }
 
 function openModalAnimate() {

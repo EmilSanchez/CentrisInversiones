@@ -24,6 +24,21 @@ async function navigate(vista, param = null) {
   mostrarCargando(true);
 
   try {
+    const titles = {
+      'dashboard':        ['Dashboard', 'Historial de ventas'],
+      'productos':        ['Productos', 'Gestión de inventario'],
+      'detalle-producto': ['Detalle producto', ''],
+      'movimientos':      ['Movimientos', 'Historial de inversiones'],
+      'reportes':         ['Reportes', 'Análisis financiero'],
+      'configuracion':    ['Configuración', 'Ajustes del sistema'],
+      'firebase':         ['Configuración', 'Ajustes del sistema'],
+    };
+    const [t, s] = titles[vista] || ['', ''];
+    const el1 = document.getElementById('header-page-title');
+    const el2 = document.getElementById('header-page-sub');
+    if (el1) el1.textContent = t;
+    if (el2) el2.textContent = s;
+
     switch (vista) {
       case 'dashboard':
         await renderDashboard();
@@ -39,6 +54,9 @@ async function navigate(vista, param = null) {
         break;
       case 'reportes':
         await renderReportes();
+        break;
+      case 'configuracion':
+        await renderConfiguracion();
         break;
       case 'firebase':
         await renderFirebase();
@@ -539,7 +557,8 @@ async function marcarFirebaseConectado() {
 
 async function descargarReporte(tipo) {
   const formato = window._reporteFormato || 'excel';
-  // Leer secciones seleccionadas desde checkboxes (solo para general)
+  const mesSeleccionado = document.getElementById('rep-mes-select')?.value || '';
+
   let secciones = null;
   if (tipo === 'general') {
     const checks = document.querySelectorAll('.rep-check:checked');
@@ -553,13 +572,18 @@ async function descargarReporte(tipo) {
   mostrarActionSpinner(true);
 
   try {
-    const productos = await getProductosEnriquecidos();
-    const ventas = await getVentas();
+    let productos = await getProductosEnriquecidos();
+    let ventas = await getVentas();
+
+    // Filtrar por mes si se seleccionó uno
+    if (mesSeleccionado) {
+      ventas = ventas.filter(v => v.fecha && v.fecha.startsWith(mesSeleccionado));
+    }
 
     if (formato === 'pdf') {
-      await descargarReportePDF(tipo, productos, ventas, secciones);
+      await descargarReportePDF(tipo, productos, ventas, secciones, mesSeleccionado);
     } else if (formato === 'excel') {
-      await descargarReporteExcel(tipo, productos, ventas, secciones);
+      await descargarReporteExcel(tipo, productos, ventas, secciones, mesSeleccionado);
     } else {
       await descargarReporteCSV(tipo, productos, ventas, secciones);
     }
@@ -601,9 +625,10 @@ function calcularMeses(productos, ventas) {
 
 // ─── EXCEL ────────────────────────────────────────────────────────────────
 
-async function descargarReporteExcel(tipo, productos, ventas, secciones) {
+async function descargarReporteExcel(tipo, productos, ventas, secciones, mesSeleccionado = '') {
   const wb = XLSX.utils.book_new();
   const mostrar = (sec) => !secciones || secciones.includes(sec);
+  const mesLabel2 = mesSeleccionado ? ` (${mesLabel(mesSeleccionado)})` : '';
 
   const addSheet = (nombre, filas) => {
     const ws = XLSX.utils.aoa_to_sheet(filas);
@@ -685,12 +710,12 @@ async function descargarReporteExcel(tipo, productos, ventas, secciones) {
 
 // ─── PDF ──────────────────────────────────────────────────────────────────
 
-async function descargarReportePDF(tipo, productos, ventas, secciones) {
+async function descargarReportePDF(tipo, productos, ventas, secciones, mesSeleccionado = '') {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const PW = 297; // page width landscape A4
-  const ML = 10, MR = 10; // margins
-  const TW = PW - ML - MR; // table width
+  const PW = 297;
+  const ML = 10, MR = 10;
+  const TW = PW - ML - MR;
   const fecha = new Date().toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' });
   const GRIS = [75, 85, 99];
   let yPos = 0;
@@ -704,7 +729,8 @@ async function descargarReportePDF(tipo, productos, ventas, secciones) {
     doc.text('CENTRIS INVERSIONES', ML + 4, 12);
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
-    doc.text(titulo, ML + 4, 21);
+    const subtitulo = mesSeleccionado ? `${titulo} — ${mesLabel(mesSeleccionado)}` : titulo;
+    doc.text(subtitulo, ML + 4, 21);
     doc.text(fecha, PW - MR - 4, 21, { align: 'right' });
     doc.setTextColor(0, 0, 0);
     yPos = 38;
