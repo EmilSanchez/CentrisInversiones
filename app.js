@@ -250,8 +250,11 @@ async function guardarVenta() {
     mostrarAlerta('Venta registrada correctamente.', 'success');
     closeModal();
 
-    if (appState.vistaActual === 'detalle-producto') {
+    const vistaActual = appState.vistaActual;
+    if (vistaActual === 'detalle-producto') {
       await renderDetalleProducto(data.productoId);
+    } else if (vistaActual === 'dashboard') {
+      await renderDashboard();
     } else {
       await navigate('productos');
     }
