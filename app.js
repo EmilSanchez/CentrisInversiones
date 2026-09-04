@@ -684,11 +684,12 @@ async function descargarReporteExcel(tipo, productos, ventas, secciones, mesSele
 
   if ((tipo === 'resumen' || tipo === 'general') && mostrar('resumen')) {
     const rows = [
-      ['SKU','Nombre','Inversión','Recuperado','Ganancia','Recuperación %','Costo unitario','Precio sugerido','Margen %'],
-      ...productos.map(p => {
-        const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
-        return [p.sku, p.nombre, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), parseFloat(p.recuperacionPct.toFixed(1))+'%', Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'];
-      })
+      ['SKU','Nombre','Cantidad Comprada','Cantidad Vendida','En Stock','Inversión','Recuperado','Ganancia','% de Recuperación'],
+      ...productos.map(p => [
+        p.sku, p.nombre, p.cantidad, p.unidadesVendidas, p.stockActual,
+        Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia),
+        parseFloat(p.recuperacionPct.toFixed(1))+'%'
+      ])
     ];
     addSheet('Resumen financiero', rows);
   }
@@ -869,19 +870,21 @@ async function descargarReportePDF(tipo, productos, ventas, secciones, mesSelecc
   if ((tipo === 'resumen' || tipo === 'general') && mostrar('resumen')) {
     addSectionTitle('Resumen financiero');
     addTable(
-      ['SKU', 'Nombre', 'Inversion', 'Recuperado', 'Ganancia', 'Recuperacion %', 'Margen %'],
-      productos.map(p => {
-        const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) + '%' : '—';
-        return [p.sku, p.nombre, copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia), p.recuperacionPct.toFixed(1)+'%', margen];
-      }),
+      ['SKU', 'Nombre', 'Cant. Comprada', 'Cant. Vendida', 'En Stock', 'Inversion', 'Recuperado', 'Ganancia', '% Recuperacion'],
+      productos.map(p => [
+        p.sku, p.nombre, p.cantidad, p.unidadesVendidas, p.stockActual,
+        copFmt(p.inversionTotal), copFmt(p.totalRecuperado), copFmt(p.ganancia), p.recuperacionPct.toFixed(1)+'%'
+      ]),
       {
-        0: { cellWidth: 24 },
+        0: { cellWidth: 20 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 35, halign: 'right' },
-        3: { cellWidth: 35, halign: 'right' },
-        4: { cellWidth: 35, halign: 'right' },
-        5: { cellWidth: 28, halign: 'center' },
-        6: { cellWidth: 22, halign: 'center' },
+        2: { cellWidth: 22, halign: 'center' },
+        3: { cellWidth: 22, halign: 'center' },
+        4: { cellWidth: 18, halign: 'center' },
+        5: { cellWidth: 30, halign: 'right' },
+        6: { cellWidth: 30, halign: 'right' },
+        7: { cellWidth: 30, halign: 'right' },
+        8: { cellWidth: 24, halign: 'center' },
       }
     );
   }
@@ -964,10 +967,9 @@ async function descargarReporteCSV(tipo, productos, ventas) {
 
   } else if (tipo === 'resumen') {
     filename = 'centris_resumen_financiero.csv';
-    csv = ['SKU','Nombre','Inversion Total','Total Recuperado','Ganancia','Recuperacion %','Costo Unitario','Precio Sugerido','Margen Estimado %'].join(sep) + '\n';
+    csv = ['SKU','Nombre','Cantidad Comprada','Cantidad Vendida','En Stock','Inversion','Recuperado','Ganancia','% de Recuperacion'].join(sep) + '\n';
     csv += productos.map(p => {
-      const margen = p.precioSugerido > 0 ? ((p.precioSugerido - p.costoUnitario) / p.precioSugerido * 100).toFixed(1) : '0';
-      return [p.sku, p.nombre, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%', Math.round(p.costoUnitario), p.precioSugerido||0, margen+'%'].join(sep);
+      return [p.sku, p.nombre, p.cantidad, p.unidadesVendidas, p.stockActual, Math.round(p.inversionTotal), Math.round(p.totalRecuperado), Math.round(p.ganancia), p.recuperacionPct.toFixed(1)+'%'].join(sep);
     }).join('\n');
 
   } else if (tipo === 'general') {
@@ -996,6 +998,153 @@ async function descargarReporteCSV(tipo, productos, ventas) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── DESCARGA REPORTE DE MOVIMIENTOS ───────────────────────────────────────
+
+async function descargarReporteMovimientos() {
+  const formato = window._movReporteFormato || 'excel';
+  const tipoFiltro = document.getElementById('mov-rep-tipo-select')?.value || 'todos';
+  const desde = document.getElementById('mov-rep-desde')?.value || '';
+  const hasta = document.getElementById('mov-rep-hasta')?.value || '';
+  closeModal();
+  mostrarActionSpinner(true);
+
+  try {
+    let movimientos = await getMovimientos();
+    if (tipoFiltro !== 'todos') {
+      movimientos = movimientos.filter(m => m.tipo === tipoFiltro);
+    }
+    if (desde) {
+      movimientos = movimientos.filter(m => (m.fechaHora || '').slice(0, 7) >= desde);
+    }
+    if (hasta) {
+      movimientos = movimientos.filter(m => (m.fechaHora || '').slice(0, 7) <= hasta);
+    }
+
+    if (movimientos.length === 0) {
+      mostrarAlerta('No hay movimientos para ese filtro y periodo.', 'error');
+      return;
+    }
+
+    const tipoLabelMap = { todos: 'Todos los movimientos', venta: 'Ventas', reposicion: 'Reposiciones de stock' };
+    let tituloTipo = tipoLabelMap[tipoFiltro] || tipoFiltro;
+    let periodoLabel = 'periodo-completo';
+    if (desde || hasta) {
+      const desdeTxt = desde ? mesLabel(desde) : 'inicio';
+      const hastaTxt = hasta ? mesLabel(hasta) : 'hoy';
+      tituloTipo += ` (${desdeTxt} — ${hastaTxt})`;
+      periodoLabel = `${desde || 'inicio'}_a_${hasta || 'hoy'}`;
+    }
+
+    if (formato === 'pdf') {
+      descargarReporteMovimientosPDF(movimientos, tituloTipo, tipoFiltro, periodoLabel);
+    } else if (formato === 'excel') {
+      descargarReporteMovimientosExcel(movimientos, tituloTipo, tipoFiltro, periodoLabel);
+    } else {
+      descargarReporteMovimientosCSV(movimientos, tituloTipo, tipoFiltro, periodoLabel);
+    }
+    mostrarAlerta('Reporte descargado correctamente.', 'success');
+  } catch (err) {
+    console.error(err);
+    mostrarAlerta('Error al generar el reporte. Verifica la consola.', 'error');
+  } finally {
+    mostrarActionSpinner(false);
+  }
+}
+
+function descargarReporteMovimientosExcel(movimientos, tituloTipo, tipoFiltro, periodoLabel) {
+  const wb = XLSX.utils.book_new();
+  const rows = [
+    ['Fecha y hora', 'Tipo', 'Producto', 'Descripción', 'Costo productos', 'Costo envío', 'Otros costos', 'Total COP', 'Cantidad'],
+    ...movimientos.map(m => [
+      fmt.fechaHora(m.fechaHora), tipoMovLabel(m.tipo), m.productoNombre || '', m.descripcion || '',
+      Math.round(m.costoProductos || 0), Math.round(m.costoEnvio || 0), Math.round(m.otrosCostos || 0),
+      Math.round(m.totalCOP || 0), m.cantidad || 0
+    ])
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Movimientos');
+  const fecha = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `centris_movimientos_${tipoFiltro}_${periodoLabel}_${fecha}.xlsx`);
+}
+
+function descargarReporteMovimientosPDF(movimientos, tituloTipo, tipoFiltro, periodoLabel) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const PW = 297;
+  const ML = 10, MR = 10;
+  const TW = PW - ML - MR;
+  const fecha = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, PW, 30, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont(undefined, 'bold');
+  doc.text('CENTRIS INVERSIONES', ML + 4, 12);
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'normal');
+  doc.text(`Reporte de movimientos — ${tituloTipo}`, ML + 4, 21);
+  doc.text(fecha, PW - MR - 4, 21, { align: 'right' });
+  doc.setTextColor(0, 0, 0);
+
+  doc.autoTable({
+    startY: 38,
+    head: [['Fecha y hora', 'Tipo', 'Producto', 'Descripción', 'Costo productos', 'Costo envío', 'Otros costos', 'Total COP', 'Cant.']],
+    body: movimientos.map(m => [
+      fmt.fechaHora(m.fechaHora), tipoMovLabel(m.tipo), m.productoNombre || '—', m.descripcion || '—',
+      copFmt(m.costoProductos || 0), copFmt(m.costoEnvio || 0), copFmt(m.otrosCostos || 0),
+      copFmt(m.totalCOP || 0), m.cantidad || '—'
+    ]),
+    tableWidth: TW,
+    margin: { left: ML, right: MR },
+    styles: { fontSize: 7.5, cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 }, overflow: 'linebreak', valign: 'middle' },
+    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: 'bold', fontSize: 8, halign: 'center', valign: 'middle' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: 32 },
+      1: { cellWidth: 22, halign: 'center' },
+      2: { cellWidth: 'auto' },
+      3: { cellWidth: 55 },
+      4: { cellWidth: 28, halign: 'right' },
+      5: { cellWidth: 25, halign: 'right' },
+      6: { cellWidth: 25, halign: 'right' },
+      7: { cellWidth: 28, halign: 'right' },
+      8: { cellWidth: 16, halign: 'center' },
+    },
+  });
+
+  const totalPags = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= totalPags; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(160);
+    doc.text(`Centris Inversiones  \u00b7  Generado el ${fecha}  \u00b7  Pag. ${i} de ${totalPags}`, PW / 2, 206, { align: 'center' });
+  }
+
+  const fechaISO = new Date().toISOString().slice(0, 10);
+  doc.save(`centris_movimientos_${tipoFiltro}_${periodoLabel}_${fechaISO}.pdf`);
+}
+
+function descargarReporteMovimientosCSV(movimientos, tituloTipo, tipoFiltro, periodoLabel) {
+  const sep = ';';
+  const headers = ['Fecha y hora', 'Tipo', 'Producto', 'Descripcion', 'Costo productos', 'Costo envio', 'Otros costos', 'Total COP', 'Cantidad'];
+  let csv = headers.join(sep) + '\n';
+  csv += movimientos.map(m => [
+    fmt.fechaHora(m.fechaHora), tipoMovLabel(m.tipo), m.productoNombre || '', (m.descripcion || '').replace(/;/g, ','),
+    Math.round(m.costoProductos || 0), Math.round(m.costoEnvio || 0), Math.round(m.otrosCostos || 0),
+    Math.round(m.totalCOP || 0), m.cantidad || 0
+  ].join(sep)).join('\n');
+
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `centris_movimientos_${tipoFiltro}_${periodoLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -765,11 +765,30 @@ async function openModalEditarMovimiento(movId) {
 
 async function renderMovimientos() {
   const movimientos = await getMovimientos();
+  const filtro = window._movFiltro || 'todos';
+  const movimientosFiltrados = filtro === 'todos' ? movimientos : movimientos.filter(m => m.tipo === filtro);
 
   document.querySelector('#main-content').innerHTML = `
     <div class="page-header">
-      <h1>Movimientos</h1>
-      <span class="subtitle">Historial de inversiones, reposiciones y costos</span>
+      <div>
+        <h1>Movimientos</h1>
+        <span class="subtitle">Historial de inversiones, reposiciones y costos</span>
+      </div>
+      <button class="btn-icon" title="Generar reporte" onclick="openModalReporteMovimientos()">
+        ${ICONS.download}
+      </button>
+    </div>
+
+    <div class="reportes-tabs">
+      <button class="tab ${filtro === 'todos' ? 'active' : ''}" onclick="filtrarMovimientos('todos')">
+        Todos <span class="text-muted">(${movimientos.length})</span>
+      </button>
+      <button class="tab ${filtro === 'venta' ? 'active' : ''}" onclick="filtrarMovimientos('venta')">
+        Ventas <span class="text-muted">(${movimientos.filter(m => m.tipo === 'venta').length})</span>
+      </button>
+      <button class="tab ${filtro === 'reposicion' ? 'active' : ''}" onclick="filtrarMovimientos('reposicion')">
+        Reposiciones <span class="text-muted">(${movimientos.filter(m => m.tipo === 'reposicion').length})</span>
+      </button>
     </div>
 
     <div class="card">
@@ -791,9 +810,9 @@ async function renderMovimientos() {
             
           </thead>
           <tbody>
-            ${movimientos.length === 0
-              ? '<tr><td colspan="9" class="empty">Sin movimientos registrados</td></tr>'
-              : movimientos.map(m => `
+            ${movimientosFiltrados.length === 0
+              ? '<tr><td colspan="9" class="empty">Sin movimientos para este filtro</td></tr>'
+              : movimientosFiltrados.map(m => `
                 <tr>
                   <td style="white-space:nowrap">${fmt.fechaHora(m.fechaHora)}</td>
                   <td><span class="mov-tipo ${m.tipo}">${tipoMovLabel(m.tipo)}</span></td>
@@ -815,6 +834,11 @@ async function renderMovimientos() {
       </div>
     </div>
   `;
+}
+
+function filtrarMovimientos(tipo) {
+  window._movFiltro = tipo;
+  renderMovimientos();
 }
 
 function tipoMovLabel(tipo) {
@@ -1705,6 +1729,103 @@ function seleccionarFormato(fmt) {
   window._reporteFormato = fmt;
   document.querySelectorAll('.reporte-fmt-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('fmt-' + fmt)?.classList.add('active');
+}
+
+// ─── MODAL DESCARGA REPORTE DE MOVIMIENTOS ────────────────────────────────
+
+async function openModalReporteMovimientos() {
+  const filtroActual = window._movFiltro || 'todos';
+  const movimientos = await getMovimientos();
+  const mesesSet = new Set(movimientos.map(m => (m.fechaHora || '').slice(0, 7)).filter(Boolean));
+  const meses = [...mesesSet].sort().reverse();
+  const opcionesMes = meses.map(m => `<option value="${m}">${formatearMesLabel(m)}</option>`).join('');
+
+  document.getElementById('modal-overlay').innerHTML = `
+    <div class="modal modal-reporte">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="modal-header-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <h2>Generar reporte de movimientos</h2>
+        </div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Formato -->
+        <div class="rep-config-row">
+          <div class="rep-config-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Formato
+          </div>
+          <div class="reporte-formato-btns">
+            <button class="reporte-fmt-btn active" id="fmt-mov-excel" onclick="seleccionarFormatoMov('excel')">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+              Excel
+            </button>
+            <button class="reporte-fmt-btn" id="fmt-mov-pdf" onclick="seleccionarFormatoMov('pdf')">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
+              PDF
+            </button>
+            <button class="reporte-fmt-btn" id="fmt-mov-csv" onclick="seleccionarFormatoMov('csv')">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              CSV
+            </button>
+          </div>
+        </div>
+
+        <!-- Tipo de movimiento -->
+        <div class="rep-config-row">
+          <div class="rep-config-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Tipo de movimiento
+          </div>
+          <select id="mov-rep-tipo-select" class="select-mes" style="flex:1;max-width:220px">
+            <option value="todos" ${filtroActual === 'todos' ? 'selected' : ''}>Todos los movimientos</option>
+            <option value="venta" ${filtroActual === 'venta' ? 'selected' : ''}>Solo ventas</option>
+            <option value="reposicion" ${filtroActual === 'reposicion' ? 'selected' : ''}>Solo reposiciones de stock</option>
+          </select>
+        </div>
+
+        <!-- Rango de fechas -->
+        <div class="rep-config-row">
+          <div class="rep-config-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Periodo
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
+            <select id="mov-rep-desde" class="select-mes" style="flex:1;min-width:140px">
+              <option value="">Desde el inicio</option>
+              ${opcionesMes}
+            </select>
+            <span class="text-muted" style="font-size:.8rem">hasta</span>
+            <select id="mov-rep-hasta" class="select-mes" style="flex:1;min-width:140px">
+              <option value="">Hasta hoy</option>
+              ${opcionesMes}
+            </select>
+          </div>
+        </div>
+        <div class="text-muted" style="font-size:.78rem;padding:0 0 4px">Deja ambos campos en su valor por defecto para incluir todo el historial.</div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cerrar</button>
+        <button class="btn-primary" onclick="descargarReporteMovimientos()">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Generar reporte
+        </button>
+      </div>
+    </div>
+  `;
+  window._movReporteFormato = 'excel';
+  openModalAnimate();
+}
+
+function seleccionarFormatoMov(fmt) {
+  window._movReporteFormato = fmt;
+  document.querySelectorAll('#modal-overlay .reporte-fmt-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('fmt-mov-' + fmt)?.classList.add('active');
 }
 
 // ─── VISTA FIREBASE ────────────────────────────────────────────────────────
